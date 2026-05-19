@@ -1,30 +1,48 @@
-# Proper Markdown Editor
+# Typen
 
-macOS Flutter app — 一个文件级 Markdown 编辑器，WYSIWYG 与源码双模式切换。
+> A proper Markdown editor for macOS — open-source [Typora](https://typora.io) alternative built in Flutter.
 
-从 `garage-task-dashboard` 的 mobile 端"每日收获"日报组件抽出内核，去掉日期导航和 API 绑定，
-改成基于本地文件路径的最近列表。
+Single-file Markdown editing with a WYSIWYG ↔ source toggle, system-native menu bar (with Open Recent), and tight typography modeled after Typora / iA Writer / GitHub-Markdown. Dark theme by default.
 
-## 功能
+![status](https://img.shields.io/badge/status-alpha-orange) ![platform](https://img.shields.io/badge/platform-macOS-lightgrey) ![flutter](https://img.shields.io/badge/flutter-3.41-blue)
 
-- **双模式编辑** — WYSIWYG（基于 `appflowy_editor`）↔ 源码（纯 markdown），切换无损往返
-- **自动保存** — 编辑后 800ms 防抖写盘，状态栏实时显示（未保存 / 保存中 / 已保存 / 失败）
-- **最近文件** — 左侧栏列出最多 30 个最近打开文件，启动时自动恢复上次文件
-- **暗色暖色调** — 沿用 Dusk 设计系统（gold/coral/emerald accent）
+## Why
 
-## 键盘
+Typora is closed-source and paid. I wanted something I could read the source of, tweak the typography of, and use without licensing concerns. Typen aims to nail the **single-document, no-distractions, WYSIWYG-or-source** writing experience that Typora got right, while being open and hackable.
 
-| 键位 | 作用 |
+## Features
+
+- **WYSIWYG ↔ source toggle** — appflowy_editor renders rich markdown live; one keypress (`⌘/`) swaps to raw markdown text. Round-trip is lossless within markdown's grammar.
+- **System menu bar** — native macOS menus: `File → Open / Open Recent / Save`, `View → Mode / Full Screen`. The recents list lives in the menu bar, not a sidebar.
+- **No sidebar, no welcome page** — launches straight into an `Untitled` buffer or the last file. Distraction-free by default.
+- **Explicit save** — no auto-save. `⌘S` to save, save dialog for new files. Switching docs with unsaved changes prompts `Save / Discard / Cancel`.
+- **Typography that doesn't fight you** — researched defaults from Typora / iA Writer / Bear / Obsidian / github-markdown-css. 16px body, 760px reading column, proper heading hierarchy. Cursor aligned with glyph.
+- **Dark warm palette** — gold / coral / emerald accents on a 4-layer surface ramp (the "Dusk" system).
+
+## Keyboard
+
+| Shortcut | Action |
 |---|---|
-| `⌘O` | 打开 `.md` 文件 |
-| `⌘S` / `⌘Enter` | 立即保存（绕过防抖） |
-| `⌘/` | 切换 WYSIWYG / 源码模式 |
+| `⌘O` | Open a `.md` file |
+| `⌘S` | Save (or Save As… if Untitled) |
+| `⌘/` | Toggle WYSIWYG / source mode |
+| `⌃⌘F` | Toggle full screen |
 
-## 开发
+## Status
 
-国内环境需要走镜像：
+Alpha. macOS-only for now. Works for daily writing but expect rough edges.
+
+Known limitations:
+- `appflowy_editor` doesn't expose `cursorHeight`, so achieving cursor / glyph / line-box alignment forces `line-height: 1.0` (single-paragraph multi-line wrapping has no inter-line spacing). Inter-paragraph rhythm is handled via block padding instead.
+- WYSIWYG ↔ source round-trip is lossy for some corner cases (YAML front matter, complex tables, raw HTML blocks).
+
+## Development
 
 ```bash
+git clone https://github.com/Gitnapp/Typen.git
+cd Typen
+
+# China mirror (skip if you have direct pub.dev access)
 export PUB_HOSTED_URL=https://pub.flutter-io.cn
 export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
 
@@ -32,14 +50,25 @@ flutter pub get
 flutter run -d macos
 ```
 
-## 结构
+## Structure
 
 ```
 lib/
-├── main.dart            # App shell, 文件 I/O, 自动保存, 键盘快捷键
-├── theme.dart           # 内联自 garage_core 的 AppColors + kAppEase
-├── recents.dart         # 最近文件 SharedPreferences 持久化
+├── main.dart            # App shell, file I/O, save flow, platform menu bar
+├── theme.dart           # Inlined "Dusk" color tokens (gold / coral / emerald)
+├── recents.dart         # SharedPreferences-backed recent files list
 └── widgets/
-    ├── editor_pane.dart # WYSIWYG ↔ 源码 切换
-    └── sidebar.dart     # 左侧最近列表
+    └── editor_pane.dart # appflowy_editor (WYSIWYG) ↔ TextField (source)
 ```
+
+## Roadmap
+
+- [ ] Custom `AppFlowyRichText` fork or wrapper that lets us pass explicit `cursorHeight` — would unlock comfortable line-height + perfect cursor alignment simultaneously
+- [ ] `.md` file association (double-click to open in Finder)
+- [ ] Find & replace
+- [ ] Export to PDF / HTML
+- [ ] Linux + Windows builds
+
+## License
+
+MIT
