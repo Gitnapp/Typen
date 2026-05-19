@@ -1,0 +1,30 @@
+name: proper_md_editor
+description: "Proper Markdown Editor — WYSIWYG + source toggle"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Editor core
+  appflowy_editor: ^6.2.0
+  flutter_markdown_plus: ^1.0.7
+  markdown: ^7.3.1
+
+  # File I/O + recents
+  file_selector: ^1.0.3
+  path: ^1.9.0
+  shared_preferences: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
