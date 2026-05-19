@@ -136,19 +136,26 @@ class EditorPaneState extends State<EditorPane> {
       selectionColor: AppColors.gold.withValues(alpha: 0.26),
       padding: const EdgeInsets.symmetric(horizontal: 40),
       textStyleConfiguration: TextStyleConfiguration(
-        // appflowy_editor overrides `text.height` with this top-level
-        // `lineHeight` (rich_text/appflowy_rich_text.dart:558). Setting
-        // height on the inner TextStyle has no effect — must be set here.
-        lineHeight: 1.55,
-        // Defaults are applyHeight*Ascent/Descent = false, which produces
-        // a line box SHORTER than the cursor (cursor uses full caret
-        // height including leading; line box drops first ascent leading
-        // and last descent leading). Setting both true makes the line
-        // box match the cursor, so glyph + caret share the same span.
+        // The two competing constraints:
+        //   1. cursor height (= getFullHeightForCaret) must match the
+        //      visible line box (= selection rect height)
+        //   2. visible glyph should sit symmetrically inside that box
+        //
+        // The library doesn't expose AppFlowyRichText.cursorHeight, so we
+        // can't override the caret height directly. The only config that
+        // satisfies BOTH constraints is `lineHeight: 1.0` — no extra
+        // leading anywhere, so the line box collapses to natural font
+        // metrics (ascent + descent ≈ fontSize), which is exactly what
+        // the caret rect is. applyHeight*/leadingDistribution become
+        // moot when there's no leading to distribute.
+        //
+        // Tradeoff: when a single paragraph wraps to >1 line, the lines
+        // touch (no inter-line space). For typical markdown writing
+        // paragraphs are short and break on `\n\n`, so this is rare;
+        // inter-paragraph breathing comes from block padding below.
+        lineHeight: 1.0,
         applyHeightToFirstAscent: true,
         applyHeightToLastDescent: true,
-        // Even leading puts the extra (height-1.0)*fontSize evenly above
-        // and below the glyph — glyph ends up visually centered.
         leadingDistribution: TextLeadingDistribution.even,
         text: const TextStyle(
           color: AppColors.textPrimary,
@@ -189,11 +196,15 @@ class EditorPaneState extends State<EditorPane> {
           };
         },
       ),
+      // Headings use height: 1.0 for the same caret-vs-line-box parity
+      // reason as body text (see TextStyleConfiguration comment above).
+      // Breathing room between heading and adjacent paragraph comes from
+      // block padding on the heading block (top: 28/24/20/16, bottom: 12/10/8/6).
       textStyleBuilder: (level) => switch (level) {
         1 => const TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.w700,
-            height: 1.25,
+            height: 1.0,
             letterSpacing: -0.4,
             color: AppColors.textPrimary,
             leadingDistribution: TextLeadingDistribution.even,
@@ -201,7 +212,7 @@ class EditorPaneState extends State<EditorPane> {
         2 => const TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w700,
-            height: 1.3,
+            height: 1.0,
             letterSpacing: -0.2,
             color: AppColors.textPrimary,
             leadingDistribution: TextLeadingDistribution.even,
@@ -209,14 +220,14 @@ class EditorPaneState extends State<EditorPane> {
         3 => const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            height: 1.35,
+            height: 1.0,
             color: AppColors.textPrimary,
             leadingDistribution: TextLeadingDistribution.even,
           ),
         _ => const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            height: 1.45,
+            height: 1.0,
             color: AppColors.textPrimary,
             leadingDistribution: TextLeadingDistribution.even,
           ),
@@ -228,19 +239,20 @@ class EditorPaneState extends State<EditorPane> {
       HeadingBlockKeys.type: headingBuilder,
       ParagraphBlockKeys.type: ParagraphBlockComponentBuilder(
         configuration: standardBlockComponentConfiguration.copyWith(
-          // Bottom-only spacing — avoids margin-collapse surprises and matches
-          // GitHub-md / Typora-Github tight rhythm.
-          padding: (_) => const EdgeInsets.only(bottom: 8),
+          // Inter-paragraph breathing room is delivered entirely by block
+          // padding here, since lineHeight: 1.0 leaves no leading inside
+          // the line itself. ~12px gives the same vertical rhythm a 1.5
+          // line-height would produce, without any leading mismatch.
+          padding: (_) => const EdgeInsets.only(bottom: 12),
           // Empty paragraphs need a glyph in the placeholder track or the
-          // line box collapses to a smaller height than populated paragraphs
-          // — making blank lines render shorter than text lines. A single
-          // space is invisible but anchors the metrics. The matching style
-          // ensures the empty paragraph's line height equals the body's.
+          // line box collapses below the cursor height. A single space is
+          // invisible but anchors the metrics; placeholderTextStyle mirrors
+          // the body style (height: 1.0) so empty lines match populated ones.
           placeholderText: (_) => ' ',
           placeholderTextStyle: (_, {textSpan}) => const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 16,
-            height: 1.55,
+            height: 1.0,
             leadingDistribution: TextLeadingDistribution.even,
           ),
         ),
