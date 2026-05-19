@@ -464,6 +464,12 @@ class _TitleBar extends StatelessWidget {
   final EditorMode mode;
   final VoidCallback onToggleMode;
 
+  // Symmetric side slots: wide enough to clear macOS traffic lights on the
+  // left AND hold the status chip + mode pill + edge margin on the right.
+  // Equal widths make the filename centered relative to the entire window.
+  static const double _sideSlot = 134;
+  static const double _edgePadding = 14;
+
   @override
   Widget build(BuildContext context) {
     final isUntitled = activePath == null;
@@ -472,9 +478,9 @@ class _TitleBar extends StatelessWidget {
     return Container(
       height: 38,
       color: AppColors.surface0,
-      padding: const EdgeInsets.fromLTRB(96, 0, 14, 0),
       child: Row(
         children: [
+          const SizedBox(width: _sideSlot),
           Expanded(
             child: Center(
               child: Text(
@@ -492,9 +498,20 @@ class _TitleBar extends StatelessWidget {
               ),
             ),
           ),
-          _StatusChip(status: status, errorMsg: errorMsg),
-          const SizedBox(width: 10),
-          _ModePill(mode: mode, onTap: onToggleMode),
+          SizedBox(
+            width: _sideSlot,
+            child: Padding(
+              padding: const EdgeInsets.only(right: _edgePadding),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  _StatusChip(status: status, errorMsg: errorMsg),
+                  const SizedBox(width: 10),
+                  _ModePill(mode: mode, onTap: onToggleMode),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
