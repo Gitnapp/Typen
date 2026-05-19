@@ -22,7 +22,7 @@ class MdEditorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Proper Markdown Editor',
+      title: 'Typen',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       home: EditorHome(recents: recents),
@@ -310,7 +310,7 @@ class _EditorHomeState extends State<EditorHome> {
     // macOS app menu (about / hide / quit), then File / View.
     return [
       const PlatformMenu(
-        label: 'Proper Markdown Editor',
+        label: 'Typen',
         menus: [
           PlatformProvidedMenuItem(
             type: PlatformProvidedMenuItemType.about,
@@ -462,7 +462,6 @@ class _TitleBar extends StatelessWidget {
                   fontSize: 12.5,
                   fontWeight: FontWeight.w500,
                   letterSpacing: 0.2,
-                  fontStyle: isUntitled ? FontStyle.italic : FontStyle.normal,
                 ),
               ),
             ),

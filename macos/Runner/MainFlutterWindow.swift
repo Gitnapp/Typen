@@ -8,6 +8,11 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
+    // Fixed window title; centered horizontally in the title bar by default
+    // since there's no toolbar.
+    self.title = "Typen"
+    self.titleVisibility = .visible
+
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()
