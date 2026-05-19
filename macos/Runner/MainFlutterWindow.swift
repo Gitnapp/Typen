@@ -15,6 +15,15 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
+    let registrar = flutterViewController.registrar(forPlugin: "TypenFileOpen")
+    let channel = FlutterMethodChannel(
+      name: "typen/file_open",
+      binaryMessenger: registrar.messenger
+    )
+    if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
+      appDelegate.attachFileOpenChannel(channel)
+    }
+
     super.awakeFromNib()
   }
 }

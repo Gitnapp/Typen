@@ -43,6 +43,9 @@ class EditorHome extends StatefulWidget {
 }
 
 class _EditorHomeState extends State<EditorHome> {
+  static const MethodChannel _fileOpenChannel =
+      MethodChannel('typen/file_open');
+
   final GlobalKey<EditorPaneState> _paneKey = GlobalKey<EditorPaneState>();
 
   List<RecentFile> _recents = const [];
@@ -65,11 +68,34 @@ class _EditorHomeState extends State<EditorHome> {
   void initState() {
     super.initState();
     _recents = widget.recents.load();
-    if (_recents.isNotEmpty && File(_recents.first.path).existsSync()) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _openPath(_recents.first.path);
-      });
+    _fileOpenChannel.setMethodCallHandler(_handleNativeOpen);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrapInitialDoc());
+  }
+
+  Future<void> _bootstrapInitialDoc() async {
+    // Drain anything macOS Launch Services queued before we wired the channel.
+    List<String> pending = const [];
+    try {
+      pending = await _fileOpenChannel
+              .invokeListMethod<String>('consumePending') ??
+          const [];
+    } catch (_) {
+      // Channel not available (e.g. non-macOS) — ignore.
     }
+    if (pending.isNotEmpty) {
+      await _openPath(pending.first, skipDirtyCheck: true);
+      return;
+    }
+    if (_recents.isNotEmpty && File(_recents.first.path).existsSync()) {
+      await _openPath(_recents.first.path, skipDirtyCheck: true);
+    }
+  }
+
+  Future<dynamic> _handleNativeOpen(MethodCall call) async {
+    if (call.method == 'openFile' && call.arguments is String) {
+      await _openPath(call.arguments as String);
+    }
+    return null;
   }
 
   @override
