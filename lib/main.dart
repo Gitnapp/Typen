@@ -587,14 +587,44 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     final next = _mode == EditorMode.source
         ? EditorMode.preview
         : EditorMode.source;
+    // Neither pane maps a scroll offset to the other's content, so position
+    // is carried across as a fraction of each side's own scroll extent —
+    // close enough for continuous prose, and exact for "leave, come back".
+    final fraction = _scrollFraction(
+      _mode == EditorMode.source ? _sourceScroll : _previewScroll,
+    );
     setState(() => _mode = next);
     if (next == EditorMode.preview) {
       // The offstage field must not keep the keyboard — and handing focus to
-      // the preview is what makes the arrow and page keys scroll it.
+      // the preview is what makes the arrow and page keys scroll it. The
+      // preview only just mounted, so its scroll metrics aren't laid out
+      // until the next frame.
       _previewFocus.requestFocus();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _jumpToFraction(_previewScroll, fraction);
+      });
     } else {
+      // EditableText keeps the caret on screen for as long as it holds
+      // focus, so restoring the scroll offset *after* focusing is a fight
+      // it always wins — every correction gets scrolled right back to the
+      // caret. Placing the caret at roughly the same fraction first means
+      // that built-in scroll-into-view already lands where we want it.
+      final text = _controller.text;
+      final approx = (text.length * fraction).round().clamp(0, text.length);
+      _controller.selection = TextSelection.collapsed(offset: approx);
       _editorFocus.requestFocus();
     }
+  }
+
+  double _scrollFraction(ScrollController controller) {
+    if (!controller.hasClients) return 0;
+    final max = controller.position.maxScrollExtent;
+    return max <= 0 ? 0 : (controller.offset / max).clamp(0.0, 1.0);
+  }
+
+  void _jumpToFraction(ScrollController controller, double fraction) {
+    if (!controller.hasClients) return;
+    controller.jumpTo(fraction * controller.position.maxScrollExtent);
   }
 
   void _dispatch(Intent intent) {
@@ -749,6 +779,18 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
               onSelected: _openPicker,
             ),
             PlatformMenu(label: '打开最近', menus: _recentMenuItems()),
+          ],
+        ),
+        PlatformMenuItemGroup(
+          members: [
+            PlatformMenuItem(
+              label: '关闭窗口',
+              shortcut: const SingleActivator(
+                LogicalKeyboardKey.keyW,
+                meta: true,
+              ),
+              onSelected: Native.closeWindow,
+            ),
           ],
         ),
         PlatformMenuItemGroup(

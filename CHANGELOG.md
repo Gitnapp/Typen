@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## [2026-08-11] v0.3.1 —— 修 issue #3 / #4
+
+### ⌘W 关闭窗口快捷键无效（#3）
+
+菜单栏完全由 Dart 的 `PlatformMenuBar` 构建，之前的文件/窗口菜单没有任何一项挂 ⌘W 的 key equivalent——macOS 的快捷键只来自菜单项，窗口不会自动获得 ⌘W，按键被直接丢弃。关闭确认链路本身是通的（`EditorWindow.windowShouldClose` → `confirmClose` → `close()`），只是没有入口到达它。
+
+**改动文件：**
+- `lib/main.dart` —— 文件菜单新增"关闭窗口"，`shortcut = ⌘W`，`onSelected: Native.closeWindow`
+- `lib/native.dart` —— 新增 `closeWindow()` 包装
+- `macos/Runner/EditorWindow.swift` —— `closeWindow` 调用 `performClose(nil)`，走既有的 `windowShouldClose` → `confirmClose` 确认链路，而不是绕过确认直接 `close()`
+
+顺带在 release build 上实测确认了 v0.3.0 那次没能自动化验证的一条：⌘W 关掉最后一个窗口后 App 确实保活，Dock 图标重新打开确实补一个新窗口，复用同一个进程。
+
+### ⌘/ 切换源码/预览视图时滚动位置跳变（#4）
+
+`_toggleMode()`（`lib/main.dart`）原来只是切换 `_mode` 再把焦点交出去。源码 `TextField` 靠 `Offstage` 保持挂载，滚动位置本该没丢；但预览子树只在 `mode == preview` 时才挂载——每次进入预览都是全新的 `Markdown`/`ListView`，`PageStorage` 恢复的是"上一次预览会话"的偏移，跟源码当前位置毫无关系。切回源码时 `_editorFocus.requestFocus()` 又会触发 `EditableText` 的 scroll-to-caret，把视图拉回光标处，而不是刚才阅读的位置。
+
+**改动文件：**
+- `lib/main.dart` —— `_toggleMode()` 切换前先记录当前侧的滚动位置为**自身可滚动范围的分数**（不是像素值，因为两侧内容高度不同）；进入预览后在 `addPostFrameCallback` 里按同一分数定位；切回源码则先把光标移到大致对应分数的字符位置，再 `requestFocus()`——EditableText 自带的 scroll-to-caret 这时候会带着视图去到我们想要的地方，而不是回到旧光标位置，绕开了"焦点触发的滚动会覆盖手动设置的偏移"这个根因，而不是在它触发之后再补救（补救过的做法试了一版，会被同一机制反复拉回去，测试能复现）
+
+**新增测试：**
+- `test/editor_home_test.dart` —— 200 段长文档滚动到中间，切预览再切回源码，两个方向都断言分数偏移在 5% 容差内
+
+**已知限制（未解决，非本次范围）：**
+- 这是"比例映射"，不是内容级映射——源码里图片、代码块等高度差异较大的区块会让两侧的"视觉对应内容"有轻微偏差，Typora 那种精确的逐行映射需要在渲染时给每个 block 打锚点，留到以后再做
+
 ## [2026-08-11] v0.3.0 —— 多窗口：一个 Window 一个独立 Document
 
 ### 设计

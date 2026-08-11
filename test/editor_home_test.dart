@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:typen/main.dart';
@@ -227,6 +228,40 @@ void main() {
     // No checkmark exists on a PlatformMenuItem, so the key window is marked
     // in its label.
     expect(menuLabels('窗口'), ['✓ note.md', 'Untitled']);
+  }, variant: onMacOS);
+
+  testWidgets(
+      'toggling source/preview carries reading position as a fraction of '
+      'each side\'s own scroll extent', (tester) async {
+    final file = seed(
+      List.generate(200, (i) => '第 $i 段——用来撑满可滚动的长文档。\n\n').join(),
+    );
+    await boot(tester);
+    await openInApp(tester, file);
+
+    final sourceScroll = tester.widget<TextField>(editorField).scrollController!;
+    expect(sourceScroll.position.maxScrollExtent, greaterThan(0));
+    sourceScroll.jumpTo(sourceScroll.position.maxScrollExtent / 2);
+    await tester.pump();
+    final sourceFraction =
+        sourceScroll.offset / sourceScroll.position.maxScrollExtent;
+
+    await tester.tap(find.byTooltip('切换模式（⌘/）'));
+    await flush(tester);
+
+    final previewScroll = tester.widget<Markdown>(find.byType(Markdown)).controller!;
+    expect(previewScroll.position.maxScrollExtent, greaterThan(0));
+    final previewFraction =
+        previewScroll.offset / previewScroll.position.maxScrollExtent;
+    expect(previewFraction, closeTo(sourceFraction, 0.05));
+
+    // Back to source — focus must not drag the offset to the caret instead.
+    await tester.tap(find.byTooltip('切换模式（⌘/）'));
+    await flush(tester);
+
+    final restoredFraction =
+        sourceScroll.offset / sourceScroll.position.maxScrollExtent;
+    expect(restoredFraction, closeTo(previewFraction, 0.05));
   }, variant: onMacOS);
 
   testWidgets('an edit made by another program is not silently overwritten',
