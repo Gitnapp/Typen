@@ -1,29 +1,40 @@
 import Cocoa
 import FlutterMacOS
 
-class MainFlutterWindow: NSWindow {
+class MainFlutterWindow: NSWindow, NSWindowDelegate {
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
-    // Fixed window title; centered horizontally in the title bar by default
-    // since there's no toolbar.
-    self.title = "Typen"
-    self.titleVisibility = .visible
+    // The title, proxy icon and edited dot are driven from Dart via
+    // `setDocument` so the window reflects the actual document, the way every
+    // other macOS editor behaves.
+    self.title = "Untitled"
+
+    // Remember where the user put the window between launches.
+    self.setFrameAutosaveName("TypenMainWindow")
+    _ = self.setFrameUsingName("TypenMainWindow")
+
+    self.delegate = self
 
     RegisterGeneratedPlugins(registry: flutterViewController)
 
-    let registrar = flutterViewController.registrar(forPlugin: "TypenFileOpen")
+    let registrar = flutterViewController.registrar(forPlugin: "TypenNative")
     let channel = FlutterMethodChannel(
-      name: "typen/file_open",
+      name: "typen/native",
       binaryMessenger: registrar.messenger
     )
-    if let appDelegate = NSApplication.shared.delegate as? AppDelegate {
-      appDelegate.attachFileOpenChannel(channel)
-    }
+    (NSApplication.shared.delegate as? AppDelegate)?.attach(channel: channel)
 
     super.awakeFromNib()
+  }
+
+  func windowShouldClose(_ sender: NSWindow) -> Bool {
+    guard let appDelegate = NSApplication.shared.delegate as? AppDelegate else {
+      return true
+    }
+    return appDelegate.confirmWindowClose(self)
   }
 }

@@ -1,5 +1,85 @@
 # CHANGELOG
 
+## [2026-08-11] v0.2.0 —— 文本即真相：修复会破坏用户文件的编辑模型 + 补齐 macOS 公民身份
+
+### 起因
+
+对照 Typora 做差距分析时，实测发现 v0.1.0 的 ⌘S 会破坏用户文件。用项目自己的 README 片段做往返：
+
+    376 bytes in → 300 bytes out
+
+`` ```bash `` 代码块被整块删除。28 个常见 Markdown 结构里只有 4 个字节一致。
+
+根因有三层：
+1. `appflowy_editor` 的 `markdownToDocument` 默认 parser 列表里**没有 code block、没有 HTML**（`document_markdown.dart`），这些块在解析阶段就没了。
+2. `DocumentMarkdownEncoder.convert` 对没有对应 parser 的节点**静默丢弃**（`document_markdown_encoder.dart:20` 的 `if (parser != null)`，没有 else）。
+3. `documentToMarkdown` 默认 `lineBreak: ''`，块之间不插空行，段落结构整体塌掉。
+
+架构层面的根因：source of truth 是 appflowy 的 `Document`，磁盘上的 markdown 只是它的**有损投影**。对基于文件的编辑器，这个方向是反的。
+
+附带发现：`appflowy_editor` 6.2.0（2025-12-08，最新版）在 Flutter 3.44 上编译失败——`DeltaTextInputService` 未实现 `TextInputClient.onFocusReceived`。仓库当时在最新 stable 上根本 clone 不下来就跑不起来。
+
+### L1 正确性
+
+**改动文件：**
+- `pubspec.yaml` — 移除 `appflowy_editor`；包名 `proper_md_editor` → `typen`
+- `lib/document_file.dart`（新增）— `DocumentCodec` 纯字节 ↔ 文本转换：BOM / CRLF / 编码全部记录并在写回时还原；UTF-8 解码失败回退 Latin-1（逐字节可逆）而不是报"打开失败"；UTF-16 明确拒绝打开而非静默损坏；`FileStamp` 承担外部变更检测
+- `lib/widgets/editor_pane.dart` — WYSIWYG 编辑删除；源码模式成为唯一可编辑模式，预览用已有依赖 `flutter_markdown_plus` 只读渲染
+- `lib/widgets/markdown_highlighter.dart`（新增）— `TextEditingController.buildTextSpan` 覆写，在纯文本上画出 Markdown 结构。不变量：painted text ≡ buffer
+- `macos/Runner/AppDelegate.swift` — `applicationShouldTerminate` 走 `.terminateLater` + `reply(toApplicationShouldTerminate:)`，先问 Dart；`Data.write(options: .atomic)` 做原子写（沙盒安全、保留原文件属性）；security-scoped bookmark 的创建/解析/释放
+- `macos/Runner/MainFlutterWindow.swift` — `windowShouldClose` 同样的确认流程
+- `lib/main.dart` — `_writeTo` 写完后重新计算 dirty（原来在 await 期间用户继续输入会导致状态谎报"已保存"）
+
+**解决的问题：**
+- ⌘S 不再改动用户没碰过的任何字节
+- ⌘Q / ⌘W 有未保存修改时不再静默丢数据
+- 写盘不再是 truncate-then-write（崩溃不会留下半个文件）
+- 换行符 / BOM / 编码 / 结尾换行全部保留；符号链接写目标而不是替换链接本身
+- 别的程序改了同一个文件时提示而不是覆盖；缓冲区干净时自动重载
+- `files.bookmarks.app-scope` entitlement 从"声明了但代码里 0 处使用"变成真的用上——此前签名沙盒构建里"打开最近"和"启动恢复上次文件"必然失效
+
+### L2 macOS 公民身份
+
+**改动文件：**
+- `macos/Runner/AppDelegate.swift` — 新增 `application(_:open:)`。**这是一个真实 bug**：`FlutterAppDelegate` 实现了 `application:openURLs:`，AppKit 只在 delegate 不响应它时才回退到 `openFile:`/`openFiles:`。所以 v0.1.0 的"注册为 Markdown 文档打开器"从来没有生效过
+- `macos/Runner/AppDelegate.swift` — `setDocument` 驱动真实 NSWindow 的 title / representedURL（标题栏文件代理图标）/ isDocumentEdited（关闭按钮上的小圆点）
+- `macos/Runner/MainFlutterWindow.swift` — `setFrameAutosaveName` + `setFrameUsingName` 记住窗口位置
+- `lib/main.dart` — 补齐「编辑」菜单（撤销/重做/剪切/拷贝/粘贴/全选，通过向 primaryFocus 派发 Flutter Intent 实现）；⌘F / ⌥⌘F / ⌘G / ⇧⌘G 查找替换；⌘N 新建；⇧⌘S 另存为；⌘, 偏好设置；最近文件同名时显示父目录
+- `lib/find.dart` + `lib/widgets/find_bar.dart`（新增）— 查找替换（字面/正则、区分大小写、全部高亮、当前项高亮、替换/全部替换）
+- `lib/theme.dart` — 重写为 `AppPalette` ThemeExtension，新增浅色配色，跟随系统外观
+- `lib/widgets/settings_sheet.dart`（新增）— 主题 / 字号 / 列宽 / 编辑器字体
+- `lib/store.dart`（新增，取代 `lib/recents.dart`）— recents（含 bookmark）、按文件的光标与滚动位置、settings
+- `lib/main.dart` — 顶部状态条不再重复画文件名（真实标题栏已经有了），改为显示 CRLF / Latin-1 / BOM / 换行符不一致 徽章
+
+**滚动条与留白：**
+滚动视口改为占满整个窗口宽度，阅读列靠 `contentPadding` / ListView padding 把内容推进来——所以滚动条贴窗口边，而不是紧贴 760px 内容列。`TextField` 会给每个多行输入强塞一个滚动条且不暴露开关，但它是向环境 `ScrollBehavior` 要的，所以用一个"什么都不画"的 behavior 把它顶掉，再由 pane 自己画一条。预览侧原本**根本没有滚动条**（ListView 没有 controller，MaterialApp 只在移动端装 `PrimaryScrollController`），一并补上。编辑区上下的固定留白去掉。
+
+顺带修掉预览只能用鼠标滚的问题：`ScrollAction` 是从焦点**向上**找 Scrollable 或 `PrimaryScrollController`，所以 focus node 必须在 `PrimaryScrollController` 内侧才能让方向键 / PageUp / PageDown 生效。
+
+**顺带修掉的排版问题：**
+v0.1.0 为了让 cursor 和 line box 对齐，全局用了 `lineHeight: 1.0`。对拉丁文只是难看，对中日韩是**字形碰撞**（PingFang SC 的 ascent+descent ≈ 1.34em，强制行盒 1.0em 会让折行时上下行笔画叠在一起）。换成原生 TextField 后这个约束不存在了，正文行高 1.6。
+
+### 测试与 CI
+
+**新增文件：**
+- `test/document_codec_test.dart` — 24 个结构的字节级往返 + 磁盘往返、原子写无残留、符号链接、mtime 检测、Latin-1 提升、UTF-16 拒绝
+- `test/highlighter_test.dart` — 高亮不改一个字符（含 20 个对抗性输入）、span 连续无重叠
+- `test/find_test.dart` — 查找替换逻辑
+- `test/editor_home_test.dart` — 端到端：模拟原生侧 `openFile` / `confirmClose`，验证 保存/放弃/取消 三条路径、CRLF+BOM 保留、外部变更拦截
+- `.github/workflows/ci.yml` — analyze + test + release build
+
+共 56 个测试。
+
+### 已知未做
+
+- 仍是单窗口。⌘N 在当前窗口开新缓冲区，不是新窗口——真正的多窗口要等 Flutter 的 multi-view
+- 未签名 / 未公证 / 无 DMG / 无自动更新（需要 Apple Developer 凭据）
+- 混合换行符文件是唯一记录在案的保真例外：保存时统一为主导换行符，标题栏会标出
+
+### 影响范围
+
+编辑模型、文件 IO、原生集成全部重写。没有保留兼容层。
+
 ## [2026-05-19] 修复空段落 line-height 不一致 — 给 placeholder 一个 anchor 字符
 
 **改动文件：**

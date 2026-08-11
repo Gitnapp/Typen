@@ -1,40 +1,71 @@
 # Typen
 
-> A proper Markdown editor for macOS — open-source [Typora](https://typora.io) alternative built in Flutter.
+> A byte-faithful Markdown editor for macOS — open source, hackable, and structurally incapable of rewriting parts of your file you didn't touch.
 
-Single-file Markdown editing with a WYSIWYG ↔ source toggle, system-native menu bar (with Open Recent), and tight typography modeled after Typora / iA Writer / GitHub-Markdown. Dark theme by default.
-
-![status](https://img.shields.io/badge/status-alpha-orange) ![platform](https://img.shields.io/badge/platform-macOS-lightgrey) ![flutter](https://img.shields.io/badge/flutter-3.41-blue)
+![status](https://img.shields.io/badge/status-beta-yellow) ![platform](https://img.shields.io/badge/platform-macOS-lightgrey) ![flutter](https://img.shields.io/badge/flutter-3.44-blue)
 
 ## Why
 
-Typora is closed-source and paid. I wanted something I could read the source of, tweak the typography of, and use without licensing concerns. Typen aims to nail the **single-document, no-distractions, WYSIWYG-or-source** writing experience that Typora got right, while being open and hackable.
+Typora is closed-source and paid. I wanted something I could read the source of, tweak the typography of, and use without licensing concerns.
 
-## Features
+Typen's one non-negotiable property is **fidelity**: the bytes you open are the bytes you save, except for the characters you actually typed. Not "usually". Not "for common Markdown". Byte-for-byte, asserted by tests on every commit.
 
-- **WYSIWYG ↔ source toggle** — appflowy_editor renders rich markdown live; one keypress (`⌘/`) swaps to raw markdown text. Round-trip is lossless within markdown's grammar.
-- **System menu bar** — native macOS menus: `File → Open / Open Recent / Save`, `View → Mode / Full Screen`. The recents list lives in the menu bar, not a sidebar.
-- **No sidebar, no welcome page** — launches straight into an `Untitled` buffer or the last file. Distraction-free by default.
-- **Explicit save** — no auto-save. `⌘S` to save, save dialog for new files. Switching docs with unsaved changes prompts `Save / Discard / Cancel`.
-- **Typography that doesn't fight you** — researched defaults from Typora / iA Writer / Bear / Obsidian / github-markdown-css. 16px body, 760px reading column, proper heading hierarchy. Cursor aligned with glyph.
-- **Dark warm palette** — gold / coral / emerald accents on a 4-layer surface ramp (the "Dusk" system).
+That sounds obvious for a text editor. It isn't — see [Fidelity](#fidelity) below.
+
+## What it is
+
+- **The buffer is plain Markdown text.** There is no rich document model between you and the file, so there is nothing that can normalise, reorder, or drop a construct it doesn't understand. Raw HTML, YAML front matter, footnotes, reference links, `~~~` fences, hard line breaks, escapes, table alignment — all survive because nothing ever parsed them in the first place.
+- **Live syntax highlighting in the source view.** Headings scale up, emphasis renders, code blocks tint, links colour — while the text stays exactly the text.
+- **A read-only preview** (`⌘/`) for when you want to see it rendered. It renders; it never writes.
+- **Encoding is preserved**: CRLF stays CRLF, a BOM stays a BOM, a file that isn't valid UTF-8 round-trips through Latin-1 instead of failing to open. UTF-16 files are refused rather than silently mangled.
+- **Saves are atomic.** A crash mid-write leaves the old file, never a truncated one.
+- **It won't let you lose work**: ⌘Q and ⌘W prompt on unsaved changes, and a file edited by another program is detected instead of overwritten.
+
+## Fidelity
+
+The v0.1 WYSIWYG editor round-tripped your document through a rich-text model on every keystroke and wrote the result to disk. Feeding it a normal README:
+
+```
+376 bytes in  →  300 bytes out
+```
+
+Fenced code blocks were **deleted**. So were indented code blocks and raw HTML. Paragraph breaks collapsed. `\*escaped\*` became real emphasis. Front matter turned into a heading. Of 28 common Markdown constructs, 4 survived byte-identical.
+
+That model is gone. `test/document_codec_test.dart` now asserts byte-exact round-trips over that whole corpus, and `test/highlighter_test.dart` asserts the highlighter's painted output equals the buffer character-for-character. CI fails if either regresses.
 
 ## Keyboard
 
 | Shortcut | Action |
 |---|---|
-| `⌘O` | Open a `.md` file |
-| `⌘S` | Save (or Save As… if Untitled) |
-| `⌘/` | Toggle WYSIWYG / source mode |
-| `⌃⌘F` | Toggle full screen |
+| `⌘N` / `⌘O` | New / Open |
+| `⌘S` / `⇧⌘S` | Save / Save As |
+| `⌘/` | Toggle source ↔ preview |
+| `⌘F` / `⌥⌘F` | Find / Find & Replace |
+| `⌘G` / `⇧⌘G` | Find next / previous |
+| `⌘Z` `⇧⌘Z` `⌘X` `⌘C` `⌘V` `⌘A` | Standard editing |
+| `⌘,` | Preferences |
+| `⌃⌘F` | Full screen |
 
-## Status
+## Structure
 
-Alpha. macOS-only for now. Works for daily writing but expect rough edges.
+```
+lib/
+├── main.dart                        # App shell, save flow, menus, native handlers
+├── document_file.dart               # Byte-faithful read/write (BOM, EOL, encoding, atomic)
+├── native.dart                      # The one platform channel
+├── store.dart                       # Recents (+ sandbox bookmarks), cursor memory, settings
+├── find.dart                        # Find & replace engine (pure logic)
+├── theme.dart                       # Light + dark palettes as a ThemeExtension
+└── widgets/
+    ├── editor_pane.dart             # Source editor ↔ read-only preview
+    ├── markdown_highlighter.dart    # Markdown highlighting over plain text
+    ├── find_bar.dart
+    └── settings_sheet.dart
 
-Known limitations:
-- `appflowy_editor` doesn't expose `cursorHeight`, so achieving cursor / glyph / line-box alignment forces `line-height: 1.0` (single-paragraph multi-line wrapping has no inter-line spacing). Inter-paragraph rhythm is handled via block padding instead.
-- WYSIWYG ↔ source round-trip is lossy for some corner cases (YAML front matter, complex tables, raw HTML blocks).
+macos/Runner/
+├── AppDelegate.swift                # Quit guard, document open, bookmarks, atomic write
+└── MainFlutterWindow.swift          # Window frame autosave, close guard
+```
 
 ## Development
 
@@ -47,27 +78,16 @@ export PUB_HOSTED_URL=https://pub.flutter-io.cn
 export FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
 
 flutter pub get
+flutter test
 flutter run -d macos
 ```
 
-## Structure
+## Not there yet
 
-```
-lib/
-├── main.dart            # App shell, file I/O, save flow, platform menu bar
-├── theme.dart           # Inlined "Dusk" color tokens (gold / coral / emerald)
-├── recents.dart         # SharedPreferences-backed recent files list
-└── widgets/
-    └── editor_pane.dart # appflowy_editor (WYSIWYG) ↔ TextField (source)
-```
-
-## Roadmap
-
-- [ ] Custom `AppFlowyRichText` fork or wrapper that lets us pass explicit `cursorHeight` — would unlock comfortable line-height + perfect cursor alignment simultaneously
-- [ ] `.md` file association (double-click to open in Finder)
-- [ ] Find & replace
-- [ ] Export to PDF / HTML
-- [ ] Linux + Windows builds
+- **Single window.** `⌘N` starts a new buffer in the same window rather than opening a second one. Real multi-window needs Flutter's multi-view support.
+- **Unsigned.** No Developer ID signing, notarisation, DMG, or auto-update yet, so a downloaded build is blocked by Gatekeeper. Build it yourself for now.
+- **No image paste-to-assets, math, or export.** Preview renders local relative-path images; it does not yet help you create them.
+- Mixed CRLF/LF files are the one documented exception to byte fidelity — saving normalises them to the dominant ending, and the title bar says so.
 
 ## License
 
