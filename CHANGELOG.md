@@ -1,5 +1,39 @@
 # CHANGELOG
 
+## [2026-08-11] v0.3.0 —— 多窗口：一个 Window 一个独立 Document
+
+### 设计
+
+对齐 Typora 的差距分析之外单独立项，走了一遍完整的 grilling + domain-modeling 设计会话（见 `CONTEXT.md`），逐条敲定：Window 与 Document 一一对应；⌘N 保留同窗口新建，⇧⌘N 新增"新建窗口"；Settings/Recents 是全局共享的 Workspace state，但 v1 只做"读取时生效"，不做实时跨窗口推送；同一文件不允许被两个窗口同时打开；关闭所有窗口 App 不退出，只有显式 ⌘Q 才退出；零窗口时点 Dock 图标自动开新窗口；不做"上次退出前开着哪些文件"的会话恢复。
+
+**引擎架构（见 `docs/adr/0001-per-window-flutter-engine.md`）：** 考察了三条路径——Flutter 官方原生多视图 API（`RegularWindowController`，单 isolate 共享状态，代码最干净，但截至 Flutter 3.44 仍是 master channel + `--enable-windowing` 下的实验特性，缺初始背景色、缺首帧信号，不可用于发布）、`desktop_multi_window` 第三方包（成熟度存疑，9 个月未更新，文档建议用 patched fork）、手写多引擎（每个 Window 独立 `FlutterEngine`/`FlutterViewController`/`typen/native` channel 实例）。选了手写多引擎——不可发布的方案和维护存疑的依赖都被排除，符合"选择成熟且维护良好的库，不接受临时权宜方案"的原则。代价：跨窗口没有共享的 Dart 堆，Settings/Recents 的"共享"退化为"每次开窗口时重新读一次"，不是实时推送。
+
+### 实现
+
+**改动文件：**
+- `macos/Runner/EditorWindow.swift`（新增，由 `MainFlutterWindow.swift` 重构而来）—— 一个 Window 同时是它自己的注册表条目：自带 `FlutterViewController`（连带自己的 engine）、自己的 `typen/native` channel、`path`/`edited`/`dartReady`/`pendingPaths`。`isEmpty`/`holds(path)` 供去重和复用判断；窗口位置沿用同一个 autosave name，在持有者关闭时交接给下一个窗口
+- `macos/Runner/AppDelegate.swift`（重写）—— app 级窗口注册表 + 策略：`newWindow()` 总是开全新窗口；`openPath(path)` 按"已开则前置 → 当前是空白窗口则复用 → 否则新开"的顺序处理，⌘O / Finder 双击 / Recents 菜单统一走这一条；`applicationShouldTerminateAfterLastWindowClosed` 改为 `false`；`applicationShouldHandleReopen` 在零窗口时补一个新窗口；`applicationShouldTerminate` 依次询问每个有未保存修改的窗口，任意一个取消就整体放弃退出
+- `macos/Runner/Base.lproj/MainMenu.xib` —— 去掉 nib 里绑定的单例窗口对象，窗口现在完全在代码里创建
+- `lib/native.dart` —— 新增 `newWindow()`、`openPath(path)`、`focusWindow(id)`、`pathOpenElsewhere(path)`；新增 `windowsChanged` 原生推送的处理（`WindowInfo` 列表）
+- `lib/main.dart` —— 新增"新建窗口"菜单项（⇧⌘N）；⌘O / 打开最近 改为把选中路径交给 `Native.openPath`，不再本地直接加载；新增窗口菜单（Dart 侧渲染，逐窗口 `focusWindow`）；启动时不再自动重开最近文件——否则"新建窗口"每次都会加载最近文件，导致 Empty-window 复用规则永远不生效
+- `test/editor_home_test.dart` —— 新增窗口菜单渲染的测试
+
+**验证方式：** release build 上做了大量实测——冷启动单窗口、⇧⌘N 独立开窗、打开已开着的文件自动前置现有窗口、打开另一个文件级联开新窗口、关闭所有窗口 App 存活（pid 确认）、Dock 点击零窗口重开、⌘Q 未保存时阻塞退出并弹提示（截图确认）、窗口位置记忆跨窗口交接。设计合规审查逐条核对 10 项决策，9 项直接通过；抓到一处偏差并修掉——见下。
+
+### 修的一个真 bug：Save As 没走去重
+
+`openPath` 的去重只覆盖"打开"路径，"另存为"到一个别的窗口正开着的路径会绕过去——两个窗口最终指向同一个文件。修法：新增 `AppDelegate.pathOpenElsewhere(path, excluding:)`，Dart 在真正写盘前先查一次，撞了就报错拦下（`该文件已经在另一个窗口中打开，无法另存为同一路径。`），不再静默覆盖。
+
+### 顺带的两处视觉细节
+
+- 编辑区/预览区内容贴着标题栏下沿，看着像被裁切——`contentPadding`/`Markdown.padding` 补回一个 24px 的顶部间距（底部仍然贴边，v0.2.0 那次"去掉固定留白"的改动不受影响）
+- 光标（caret）之前跟着 `height: 1.6` 的段落行高走，看起来比字符高一大截——`TextField.cursorHeight` 显式设为 `fontSize * 1.2`，跟段落行高脱钩
+
+**已知限制：**
+- Settings / Recents 跨窗口没有实时同步（只在开新窗口时重新读一次），留到下个版本
+- 没有 ⌘W 对应的原生"关闭窗口"入口——红色按钮是目前唯一的关闭路径
+- 关闭所有窗口后 App 保活 + Dock 重开这条，代码审查确认逻辑正确，但受限于 Flutter 渲染层暴露的无障碍树为空（合成点击/AX 事件都打不到 Flutter 自己画的弹窗和控件），没能用自动化脚本端到端跑通，是人工验证的
+
 ## [2026-08-11] v0.2.0 —— 文本即真相：修复会破坏用户文件的编辑模型 + 补齐 macOS 公民身份
 
 ### 起因
