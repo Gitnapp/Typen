@@ -1,7 +1,7 @@
-name: proper_md_editor
-description: "Proper Markdown Editor — WYSIWYG + source toggle"
+name: typen
+description: "Typen — a byte-faithful Markdown editor for macOS"
 publish_to: 'none'
-version: 0.1.0+1
+version: 0.2.0+2
 
 environment:
   sdk: ^3.11.5
@@ -11,8 +11,8 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
 
-  # Editor core
-  appflowy_editor: ^6.2.0
+  # Rendering. The editable buffer is plain text — these only render the
+  # read-only preview. Nothing here is ever allowed to write to disk.
   flutter_markdown_plus: ^1.0.7
   markdown: ^7.3.1
 

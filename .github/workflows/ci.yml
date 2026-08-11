@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+
+      # The suite that matters: it asserts a file read and written back is
+      # byte-identical, across BOM / CRLF / non-UTF-8 / code fences / raw HTML.
+      # A green build here is the promise that Typen does not touch bytes the
+      # user did not touch.
+      - run: flutter test --timeout 60s
+
+      - run: flutter build macos --release
