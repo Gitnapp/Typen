@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -73,6 +71,12 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
   EditorMode _mode = EditorMode.source;
   List<RecentFile> _recents = const [];
 
+  /// Every open Window, pushed down by the native side — which owns the list.
+  /// Held only to draw the Window menu: `PlatformMenuBar` rewrites the whole
+  /// menu bar from Dart on every rebuild, so a native NSMenu cannot survive
+  /// there.
+  List<WindowInfo> _windows = const [];
+
   /// True while a modal owned by this state is on screen, so overlapping
   /// triggers (quit + activation check) cannot stack dialogs.
   bool _modalOpen = false;
@@ -105,6 +109,9 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
       onOpenFile: (path) => _openPath(path),
       onConfirmClose: _confirmClose,
       onActivated: _checkExternalChange,
+      onWindowsChanged: (windows) {
+        if (mounted) setState(() => _windows = windows);
+      },
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
@@ -126,18 +133,15 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  /// A Window either opens the document it was created for, or stays Untitled.
+  /// Reopening the last file would make every new Window a duplicate of an
+  /// existing one, and would leave no Window Empty for the native open policy
+  /// to reuse.
   Future<void> _bootstrap() async {
     final pending = await Native.consumePendingOpens();
     if (pending.isNotEmpty) {
       await _openPath(pending.first, skipDirtyCheck: true);
       return;
-    }
-    if (_recents.isNotEmpty) {
-      final path = await widget.stores.recents.resolve(_recents.first);
-      if (path != null && File(path).existsSync()) {
-        await _openPath(path, skipDirtyCheck: true);
-        return;
-      }
     }
     _syncWindow();
   }
@@ -181,19 +185,21 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     _editorFocus.requestFocus();
   }
 
+  /// Only the picker is ours — where the chosen path lands (this Window, a
+  /// Window already showing it, or a new one) is the native side's call.
   Future<void> _openPicker() async {
-    if (!await _confirmDiscard()) return;
     const group = XTypeGroup(
       label: 'Markdown',
       extensions: ['md', 'markdown', 'mdown', 'mkd', 'mkdn', 'txt'],
     );
     final file = await openFile(acceptedTypeGroups: const [group]);
     if (file == null) return;
-    await _openPath(file.path, skipDirtyCheck: true);
+    await Native.openPath(file.path);
   }
 
   Future<void> _openRecent(RecentFile recent) async {
-    if (!await _confirmDiscard()) return;
+    // Resolving first is what regains sandbox access, and gives the path the
+    // file actually lives at now.
     final path = await widget.stores.recents.resolve(recent);
     if (path == null) {
       setState(() {
@@ -202,7 +208,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
       });
       return;
     }
-    await _openPath(path, skipDirtyCheck: true);
+    await Native.openPath(path);
   }
 
   Future<void> _openPath(String path, {bool skipDirtyCheck = false}) async {
@@ -285,6 +291,10 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     if (loc == null) return;
     var path = loc.path;
     if (p.extension(path).isEmpty) path = '$path.md';
+    if (await Native.pathOpenElsewhere(path)) {
+      _reportError('该文件已经在另一个窗口中打开，无法另存为同一路径。');
+      return;
+    }
     await _writeTo(path, adoptPath: true);
   }
 
@@ -722,6 +732,15 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
               onSelected: _newDocument,
             ),
             PlatformMenuItem(
+              label: '新建窗口',
+              shortcut: const SingleActivator(
+                LogicalKeyboardKey.keyN,
+                meta: true,
+                shift: true,
+              ),
+              onSelected: Native.newWindow,
+            ),
+            PlatformMenuItem(
               label: '打开…',
               shortcut: const SingleActivator(
                 LogicalKeyboardKey.keyO,
@@ -884,13 +903,31 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
         ),
       ],
     ),
-    const PlatformMenu(
+    PlatformMenu(
       label: '窗口',
       menus: [
-        PlatformProvidedMenuItem(
-          type: PlatformProvidedMenuItemType.minimizeWindow,
+        const PlatformMenuItemGroup(
+          members: [
+            PlatformProvidedMenuItem(
+              type: PlatformProvidedMenuItemType.minimizeWindow,
+            ),
+            PlatformProvidedMenuItem(
+              type: PlatformProvidedMenuItemType.zoomWindow,
+            ),
+          ],
         ),
-        PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.zoomWindow),
+        if (_windows.isNotEmpty)
+          PlatformMenuItemGroup(
+            members: [
+              // No checkmark exists on PlatformMenuItem, so the key window is
+              // marked in the label.
+              for (final w in _windows)
+                PlatformMenuItem(
+                  label: w.isKey ? '✓ ${w.title}' : w.title,
+                  onSelected: () => Native.focusWindow(w.id),
+                ),
+            ],
+          ),
       ],
     ),
   ];

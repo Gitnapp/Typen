@@ -50,6 +50,35 @@ Finder get editorField => find.byType(TextField).first;
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  // The menu bar exists only as a channel message — there are no widgets to
+  // look for — so it is captured on the way out to the platform.
+  List<Map<Object?, Object?>>? menuBar;
+  setUp(() {
+    menuBar = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.menu, (call) async {
+      if (call.method == 'Menu.setMenus') {
+        menuBar = ((call.arguments as Map)['0'] as List)
+            .cast<Map<Object?, Object?>>();
+      }
+      return null;
+    });
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.menu, null);
+  });
+
+  /// The labels one top-level menu offers. Dividers and platform-provided
+  /// items carry no label of their own.
+  List<String> menuLabels(String label) {
+    final menu = menuBar!.firstWhere((m) => m['label'] == label);
+    return [
+      for (final child in menu['children'] as List)
+        if ((child as Map)['label'] case final String l) l,
+    ];
+  }
+
   // flutter_test reports `android`, and PlatformProvidedMenuItem throws on any
   // platform without a system menu — which would fail the whole build. The
   // variant sets and restores the override around each test body.
@@ -182,6 +211,22 @@ void main() {
       file.readAsBytesSync(),
       [0xEF, 0xBB, 0xBF, ...utf8.encode('one\r\ntwo\r\nthree\r\n')],
     );
+  }, variant: onMacOS);
+
+  testWidgets('the Window menu lists the windows the native side pushes down',
+      (tester) async {
+    await boot(tester);
+    expect(menuLabels('窗口'), isEmpty);
+
+    callFromNative('windowsChanged', [
+      {'id': 1, 'title': 'note.md', 'isKey': true},
+      {'id': 2, 'title': 'Untitled', 'isKey': false},
+    ]);
+    await flush(tester);
+
+    // No checkmark exists on a PlatformMenuItem, so the key window is marked
+    // in its label.
+    expect(menuLabels('窗口'), ['✓ note.md', 'Untitled']);
   }, variant: onMacOS);
 
   testWidgets('an edit made by another program is not silently overwritten',

@@ -2,9 +2,31 @@ import 'dart:io' show FileSystemException;
 
 import 'package:flutter/services.dart';
 
-/// Thin wrapper over the single platform channel. Every method degrades to a
-/// no-op / null when the channel is absent (unit tests, non-macOS hosts) so
-/// callers never need to know whether they are running on a real app.
+/// One open Window, as the native side reports it. The window list itself
+/// lives natively — this is only what the Window menu needs to draw it.
+class WindowInfo {
+  const WindowInfo({
+    required this.id,
+    required this.title,
+    required this.isKey,
+  });
+
+  final int id;
+  final String title;
+  final bool isKey;
+
+  static WindowInfo fromMap(Map<Object?, Object?> map) => WindowInfo(
+        id: map['id'] as int,
+        title: map['title'] as String,
+        isKey: map['isKey'] as bool,
+      );
+}
+
+/// Thin wrapper over this Window's platform channel — every Window runs its
+/// own engine and therefore its own channel instance, so every call below is
+/// scoped to the Window that makes it. Methods degrade to a no-op / null when
+/// the channel is absent (unit tests, non-macOS hosts) so callers never need to
+/// know whether they are running on a real app.
 class Native {
   static const _channel = MethodChannel('typen/native');
 
@@ -19,6 +41,26 @@ class Native {
   static Future<void> setDocument({String? path, required bool edited}) =>
       _call<void>('setDocument', {'path': path, 'edited': edited})
           .then((_) {});
+
+  /// Opens an additional Window with a blank Untitled Document. Always a fresh
+  /// Window — never reuses an Empty one.
+  static Future<void> newWindow() => _call<void>('newWindow').then((_) {});
+
+  /// Hands a chosen path to the native open policy, which decides whether to
+  /// front the Window already showing it, reuse an Empty one, or open a new
+  /// Window. Never loads the path into this Window directly.
+  static Future<void> openPath(String path) =>
+      _call<void>('openPath', {'path': path}).then((_) {});
+
+  /// Brings the Window with this id to the front.
+  static Future<void> focusWindow(int id) =>
+      _call<void>('focusWindow', {'id': id}).then((_) {});
+
+  /// True when another Window already holds this path. Save As must check
+  /// this before writing — the open/openPath dedup never runs for a path a
+  /// window arrives at by saving, not opening.
+  static Future<bool> pathOpenElsewhere(String path) async =>
+      await _call<bool>('pathOpenElsewhere', {'path': path}) ?? false;
 
   /// Foundation's atomic replace. Sandbox-aware, preserves the original
   /// file's attributes.
@@ -71,10 +113,14 @@ class Native {
   /// future completes.
   /// [onActivated] — the app came to the foreground; a good moment to check
   /// whether the file changed underneath us.
+  /// [onWindowsChanged] — the set of open Windows changed. Must be registered
+  /// before [consumePendingOpens], which is what makes the native side start
+  /// pushing to this Window.
   static void setHandlers({
     required Future<void> Function(String path) onOpenFile,
     required Future<bool> Function() onConfirmClose,
     required Future<void> Function() onActivated,
+    required void Function(List<WindowInfo> windows) onWindowsChanged,
   }) {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
@@ -85,6 +131,12 @@ class Native {
           return await onConfirmClose();
         case 'activated':
           await onActivated();
+          return null;
+        case 'windowsChanged':
+          onWindowsChanged([
+            for (final entry in call.arguments as List<Object?>)
+              WindowInfo.fromMap(entry as Map<Object?, Object?>),
+          ]);
           return null;
       }
       return null;

@@ -3,21 +3,47 @@ import FlutterMacOS
 
 @main
 class AppDelegate: FlutterAppDelegate {
-  private var pendingPaths: [String] = []
-  private var channel: FlutterMethodChannel?
-  private var dartReady = false
+  /// The window registry, in creation order. Each `EditorWindow` carries its
+  /// own document/channel/engine state; this array is the only strong
+  /// reference to them and the single source of truth for the Window menu,
+  /// duplicate-path detection and the quit sequence.
+  private var windows: [EditorWindow] = []
+  private var nextWindowID = 1
 
   /// Security-scoped URLs we currently hold access to, keyed by path. Access
-  /// must be balanced with `stopAccessingSecurityScopedResource`.
+  /// must be balanced with `stopAccessingSecurityScopedResource`, and the same
+  /// path can be reached from more than one window over time — so a release is
+  /// real only once no window still holds it.
   private var securityScoped: [String: URL] = [:]
 
-  /// Set once the user has answered the unsaved-changes prompt, so closing the
-  /// window and then terminating does not ask twice.
-  private var closeApproved = false
+  // ─── Launch ──────────────────────────────────────────────────────────────
 
+  /// `applicationDidFinishLaunching` never reaches this delegate — Flutter's
+  /// app delegate owns that hook — so launch bootstrapping happens here.
+  /// Deferring one runloop turn lets Launch Services deliver its documents
+  /// first: a launch that opened a file must not also get a blank window.
+  override func applicationWillFinishLaunching(_ notification: Notification) {
+    super.applicationWillFinishLaunching(notification)
+    DispatchQueue.main.async {
+      if self.windows.isEmpty { self.newWindow() }
+    }
+  }
+
+  /// Closing every window leaves the app running, the way Finder and Mail do;
+  /// only ⌘Q quits.
   override func applicationShouldTerminateAfterLastWindowClosed(
     _ sender: NSApplication
   ) -> Bool {
+    return false
+  }
+
+  /// Clicking the Dock icon with nothing open gives the user a window back,
+  /// rather than a running app with no way into it.
+  override func applicationShouldHandleReopen(
+    _ sender: NSApplication,
+    hasVisibleWindows flag: Bool
+  ) -> Bool {
+    if windows.isEmpty { newWindow() }
     return true
   }
 
@@ -35,11 +61,86 @@ class AppDelegate: FlutterAppDelegate {
   /// does *not* respond to this one. Overriding those alone silently does
   /// nothing.
   override func application(_ application: NSApplication, open urls: [URL]) {
-    let files = urls.filter { $0.isFileURL }
-    for url in files { deliver(path: url.path) }
+    for url in urls where url.isFileURL { openPath(url.path) }
 
     let rest = urls.filter { !$0.isFileURL }
     if !rest.isEmpty { super.application(application, open: rest) }
+  }
+
+  // ─── Windows ─────────────────────────────────────────────────────────────
+
+  /// Always a brand-new window with a blank Untitled Document. `pendingPaths`
+  /// seeds the queue its Dart side drains on boot.
+  @discardableResult
+  func newWindow(pendingPaths: [String] = []) -> EditorWindow {
+    let window = EditorWindow(
+      id: nextWindowID,
+      app: self,
+      pendingPaths: pendingPaths,
+      cascadingFrom: windows.last
+    )
+    nextWindowID += 1
+    windows.append(window)
+    window.makeKeyAndOrderFront(nil)
+    windowsChanged()
+    return window
+  }
+
+  /// The single entry point for "the user picked a file to open" — ⌘O,
+  /// Recents, Finder, the Dock.
+  func openPath(_ path: String) {
+    // Never the same Document in two windows.
+    if let existing = windows.first(where: { $0.holds(path) }) {
+      existing.makeKeyAndOrderFront(nil)
+      return
+    }
+    // An untouched window is one the user is offering us.
+    if let empty = frontmostWindow, empty.isEmpty {
+      empty.deliver(path: path)
+      empty.makeKeyAndOrderFront(nil)
+      return
+    }
+    newWindow(pendingPaths: [path])
+  }
+
+  func focusWindow(id: Int) {
+    windows.first { $0.id == id }?.makeKeyAndOrderFront(nil)
+  }
+
+  /// Save As must not silently point a second window at a path another
+  /// window already has open — `openPath`'s dedup only guards the *open*
+  /// path, not a path a window arrives at by saving.
+  func pathOpenElsewhere(_ path: String, excluding window: EditorWindow) -> Bool {
+    windows.contains { $0 !== window && $0.holds(path) }
+  }
+
+  func windowClosed(_ window: EditorWindow) {
+    windows.removeAll { $0 === window }
+    if window.ownsFrameAutosaveName {
+      window.releaseFrameAutosaveName()
+      // From the registry, not the screen: the window being closed is still
+      // in AppKit's ordered list at this point.
+      windows.first?.claimFrameAutosaveName()
+    }
+    if let path = window.path { bookmarkRelease(path: path, from: window) }
+    windowsChanged()
+  }
+
+  /// Pushes the window list to every window, because the menu bar belongs to
+  /// whichever engine rendered it last. A native `NSMenu` cannot serve here:
+  /// Flutter's `PlatformMenuBar` rebuilds `NSApp.mainMenu` from Dart on every
+  /// re-render and drops anything it did not put there — verified against this
+  /// app, a native menu added afterwards survives until the next rebuild only.
+  func windowsChanged() {
+    let list = windows.map {
+      ["id": $0.id, "title": $0.menuTitle, "isKey": $0.isKeyWindow] as [String: Any]
+    }
+    for window in windows { window.notifyWindowList(list) }
+  }
+
+  private var frontmostWindow: EditorWindow? {
+    NSApp.orderedWindows.first { $0 is EditorWindow } as? EditorWindow
+      ?? windows.last
   }
 
   // ─── Never quit on top of unsaved work ───────────────────────────────────
@@ -51,36 +152,29 @@ class AppDelegate: FlutterAppDelegate {
   override func applicationShouldTerminate(
     _ sender: NSApplication
   ) -> NSApplication.TerminateReply {
-    guard !closeApproved, dartReady, let channel = channel else {
-      return .terminateNow
-    }
-    channel.invokeMethod("confirmClose", arguments: nil) { reply in
-      // The Dart handler is total — it always answers with a Bool. Anything
-      // else means the engine is gone, in which case blocking the quit would
-      // protect nothing and only trap the user.
-      let ok = (reply as? Bool) ?? true
-      if ok { self.closeApproved = true }
-      NSApp.reply(toApplicationShouldTerminate: ok)
-    }
+    let dirty = windows.filter { $0.needsCloseConfirmation }
+    if dirty.isEmpty { return .terminateNow }
+    confirm(dirty[...]) { NSApp.reply(toApplicationShouldTerminate: $0) }
     return .terminateLater
   }
 
-  /// Same prompt for ⌘W. Returns false and closes later, once Dart answers.
-  func confirmWindowClose(_ window: NSWindow) -> Bool {
-    if closeApproved { return true }
-    guard dartReady, let channel = channel else { return true }
-    channel.invokeMethod("confirmClose", arguments: nil) { reply in
-      if (reply as? Bool) ?? true {
-        self.closeApproved = true
-        window.close()
-      }
+  /// One window at a time, each brought to front as it is asked, stopping the
+  /// moment the user cancels — prompting every window at once would stack
+  /// dialogs the user cannot attribute to a document.
+  private func confirm(
+    _ queue: ArraySlice<EditorWindow>,
+    done: @escaping (Bool) -> Void
+  ) {
+    guard let window = queue.first else { done(true); return }
+    window.makeKeyAndOrderFront(nil)
+    window.confirmClose { ok in
+      guard ok else { done(false); return }
+      self.confirm(queue.dropFirst(), done: done)
     }
-    return false
   }
 
   override func applicationDidBecomeActive(_ notification: Notification) {
-    guard dartReady else { return }
-    channel?.invokeMethod("activated", arguments: nil)
+    for window in windows { window.notifyActivated() }
   }
 
   override func applicationWillTerminate(_ notification: Notification) {
@@ -88,70 +182,12 @@ class AppDelegate: FlutterAppDelegate {
     securityScoped.removeAll()
   }
 
-  // ─── Channel ─────────────────────────────────────────────────────────────
-
-  func attach(channel: FlutterMethodChannel) {
-    self.channel = channel
-    channel.setMethodCallHandler { [weak self] call, result in
-      guard let self = self else { result(nil); return }
-      let args = call.arguments as? [String: Any] ?? [:]
-
-      switch call.method {
-      case "consumePendingOpens":
-        let paths = self.pendingPaths
-        self.pendingPaths.removeAll()
-        self.dartReady = true
-        result(paths)
-
-      case "setDocument":
-        self.setDocument(
-          path: args["path"] as? String,
-          edited: args["edited"] as? Bool ?? false
-        )
-        result(nil)
-
-      case "writeAtomically":
-        self.writeAtomically(args: args, result: result)
-
-      case "bookmarkCreate":
-        result(self.bookmarkCreate(path: args["path"] as? String))
-
-      case "bookmarkResolve":
-        result(self.bookmarkResolve(data: args["data"] as? String))
-
-      case "bookmarkRelease":
-        if let path = args["path"] as? String,
-           let url = self.securityScoped.removeValue(forKey: path) {
-          url.stopAccessingSecurityScopedResource()
-        }
-        result(nil)
-
-      default:
-        result(FlutterMethodNotImplemented)
-      }
-    }
-  }
-
-  // ─── Window chrome ───────────────────────────────────────────────────────
-
-  private func setDocument(path: String?, edited: Bool) {
-    guard let window = mainFlutterWindow else { return }
-    window.isDocumentEdited = edited
-    if let path = path {
-      window.representedURL = URL(fileURLWithPath: path)
-      window.title = (path as NSString).lastPathComponent
-    } else {
-      window.representedURL = nil
-      window.title = "Untitled"
-    }
-  }
-
   // ─── Atomic write ────────────────────────────────────────────────────────
 
   /// Foundation's `.atomic` write does the temp-file-plus-exchange dance using
   /// the sandbox-aware APIs and preserves the original file's attributes —
   /// doing the same by hand from Dart would break under App Sandbox.
-  private func writeAtomically(args: [String: Any], result: @escaping FlutterResult) {
+  func writeAtomically(args: [String: Any], result: @escaping FlutterResult) {
     guard let path = args["path"] as? String,
           let data = args["bytes"] as? FlutterStandardTypedData else {
       result(FlutterError(code: "bad_args", message: "path/bytes missing", details: nil))
@@ -171,7 +207,7 @@ class AppDelegate: FlutterAppDelegate {
 
   // ─── Security-scoped bookmarks ───────────────────────────────────────────
 
-  private func bookmarkCreate(path: String?) -> String? {
+  func bookmarkCreate(path: String?) -> String? {
     guard let path = path else { return nil }
     // Outside the sandbox this throws; a nil bookmark simply means the plain
     // path is enough, which it is.
@@ -184,7 +220,7 @@ class AppDelegate: FlutterAppDelegate {
       .base64EncodedString()
   }
 
-  private func bookmarkResolve(data: String?) -> String? {
+  func bookmarkResolve(data: String?) -> String? {
     guard let base64 = data, let blob = Data(base64Encoded: base64) else { return nil }
     var stale = false
     guard let url = try? URL(
@@ -200,13 +236,10 @@ class AppDelegate: FlutterAppDelegate {
     return url.path
   }
 
-  // ─── Pending open queue ──────────────────────────────────────────────────
-
-  private func deliver(path: String) {
-    if dartReady, let channel = channel {
-      channel.invokeMethod("openFile", arguments: path)
-    } else {
-      pendingPaths.append(path)
-    }
+  /// Access is app-wide, so it must outlive the releasing window whenever
+  /// another window still has the same file open.
+  func bookmarkRelease(path: String, from window: EditorWindow) {
+    if windows.contains(where: { $0 !== window && $0.holds(path) }) { return }
+    securityScoped.removeValue(forKey: path)?.stopAccessingSecurityScopedResource()
   }
 }

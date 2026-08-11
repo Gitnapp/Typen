@@ -110,6 +110,10 @@ class EditorPane extends StatelessWidget {
           autofocus: true,
           cursorColor: palette.gold,
           cursorWidth: 2,
+          // Flutter sizes the caret to the *paragraph* line height by default,
+          // not the glyph — with height: 1.6 below that reads as comically
+          // tall. Pin it to the font's own metrics instead.
+          cursorHeight: settings.fontSize * 1.2,
           // The controller supplies every span's style; this only sets the
           // metrics the field uses for an empty buffer and the caret.
           style: TextStyle(
@@ -121,7 +125,9 @@ class EditorPane extends StatelessWidget {
           ),
           decoration: InputDecoration(
             border: InputBorder.none,
-            contentPadding: EdgeInsets.symmetric(horizontal: side),
+            // Flush against the title bar reads as clipped, not minimal —
+            // a small top gap only, bottom stays flush per the scrollbar fix.
+            contentPadding: EdgeInsets.fromLTRB(side, 24, side, 0),
             hintText: '# 写点什么…',
             hintStyle: TextStyle(color: palette.textMuted),
           ),
@@ -169,7 +175,7 @@ class EditorPane extends StatelessWidget {
               controller: previewScrollController,
               data: stripFrontMatter(controller.text),
               selectable: true,
-              padding: EdgeInsets.fromLTRB(side, 0, side, 60),
+              padding: EdgeInsets.fromLTRB(side, 24, side, 60),
               extensionSet: md.ExtensionSet.gitHubWeb,
               styleSheet: _styleSheet(palette),
               imageBuilder: _buildImage,
