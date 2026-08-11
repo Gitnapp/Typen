@@ -56,6 +56,11 @@ class Native {
   static Future<void> focusWindow(int id) =>
       _call<void>('focusWindow', {'id': id}).then((_) {});
 
+  /// Closes this Window the same way the red button does — routes through
+  /// the existing windowShouldClose / confirmClose flow, no separate path.
+  static Future<void> closeWindow() =>
+      _call<void>('closeWindow').then((_) {});
+
   /// True when another Window already holds this path. Save As must check
   /// this before writing — the open/openPath dedup never runs for a path a
   /// window arrives at by saving, not opening.

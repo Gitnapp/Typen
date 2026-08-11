@@ -189,6 +189,12 @@ final class EditorWindow: NSWindow, NSWindowDelegate {
       app.newWindow()
       result(nil)
 
+    case "closeWindow":
+      // Same door as the red button: performClose still runs
+      // windowShouldClose, so the unsaved-changes confirm is unchanged.
+      performClose(nil)
+      result(nil)
+
     // `openPath` and `focusWindow` take the argument map the other methods
     // use, or the bare value on its own.
     case "openPath":
