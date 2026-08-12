@@ -82,10 +82,20 @@ flutter test
 flutter run -d macos
 ```
 
+## Release
+
+```bash
+./scripts/notarize.sh
+```
+
+Builds, signs with a Developer ID Application identity, and notarizes —
+see [docs/notarization.md](docs/notarization.md) for one-time machine setup
+and how it works.
+
 ## Not there yet
 
 - **Single window.** `⌘N` starts a new buffer in the same window rather than opening a second one. Real multi-window needs Flutter's multi-view support.
-- **Unsigned.** No Developer ID signing, notarisation, DMG, or auto-update yet, so a downloaded build is blocked by Gatekeeper. Build it yourself for now.
+- **No DMG or auto-update.** Notarized `.app` only for now — no installer or update mechanism.
 - **No image paste-to-assets, math, or export.** Preview renders local relative-path images; it does not yet help you create them.
 - Mixed CRLF/LF files are the one documented exception to byte fidelity — saving normalises them to the dominant ending, and the title bar says so.
 

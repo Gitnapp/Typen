@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [2026-08-12] v0.3.2 —— Developer ID 签名 + 公证
+
+发布版本现在用 Developer ID Application 证书签名并提交 Apple 公证，下载后的 `Typen.app` 不再被 Gatekeeper 拦截。
+
+**新增文件：**
+- `scripts/notarize.sh` —— 一条命令跑完 `flutter build macos --release` → codesign（Hardened Runtime）→ 提交公证 → staple → 校验
+- `docs/notarization.md` —— 公证原理、新机器一次性配置步骤（证书、notarytool 凭证）
+
+**改动文件：**
+- `README.md` —— 新增 Release 小节，去掉过时的"Unsigned"说明
+
 ## [2026-08-11] v0.3.1 —— 修 issue #3 / #4
 
 ### ⌘W 关闭窗口快捷键无效（#3）
