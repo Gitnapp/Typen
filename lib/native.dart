@@ -61,6 +61,23 @@ class Native {
   static Future<void> closeWindow() =>
       _call<void>('closeWindow').then((_) {});
 
+  /// Opens the Preferences window, or brings the existing one to the front —
+  /// it is a singleton, kept outside the Editor Window registry.
+  static Future<void> openPreferences() =>
+      _call<void>('openPreferences').then((_) {});
+
+  /// Same as [openPreferences], but also tells it to jump to 关于 and run an
+  /// update check — the one place in the app that shows an update dialog.
+  static Future<void> openPreferencesAndCheckUpdates() =>
+      _call<void>('openPreferences', {'checkUpdates': true}).then((_) {});
+
+  /// Tells every other Window's Settings to re-read the platform store. Each
+  /// Window runs its own engine with its own cached copy — see
+  /// `docs/adr/0001-per-window-flutter-engine.md` — so a change made here
+  /// would otherwise sit invisible until that Window happened to reload it.
+  static Future<void> notifySettingsChanged() =>
+      _call<void>('settingsChanged').then((_) {});
+
   /// True when another Window already holds this path. Save As must check
   /// this before writing — the open/openPath dedup never runs for a path a
   /// window arrives at by saving, not opening.
@@ -121,11 +138,14 @@ class Native {
   /// [onWindowsChanged] — the set of open Windows changed. Must be registered
   /// before [consumePendingOpens], which is what makes the native side start
   /// pushing to this Window.
+  /// [onSettingsChanged] — another Window changed a setting; re-read it from
+  /// the platform store.
   static void setHandlers({
     required Future<void> Function(String path) onOpenFile,
     required Future<bool> Function() onConfirmClose,
     required Future<void> Function() onActivated,
     required void Function(List<WindowInfo> windows) onWindowsChanged,
+    void Function()? onSettingsChanged,
   }) {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
@@ -143,7 +163,29 @@ class Native {
               WindowInfo.fromMap(entry as Map<Object?, Object?>),
           ]);
           return null;
+        case 'settingsChanged':
+          onSettingsChanged?.call();
+          return null;
       }
+      return null;
+    });
+  }
+
+  // ─── Preferences window only ─────────────────────────────────────────────
+  // This Window carries no Document, so it needs none of the handlers above
+  // — just its own much smaller native-initiated surface.
+
+  /// Whether [openPreferencesAndCheckUpdates] asked for this Window before
+  /// Dart was ready to react — mirrors [consumePendingOpens].
+  static Future<bool> consumePendingCheckUpdates() async =>
+      await _call<bool>('consumePendingCheckUpdates') ?? false;
+
+  /// [onCheckUpdates] — the native side asked this (already open) Preferences
+  /// Window to jump to 关于 and run a check, the way [consumePendingCheckUpdates]
+  /// does for one that was just created.
+  static void setPreferencesHandlers({required VoidCallback onCheckUpdates}) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'checkUpdates') onCheckUpdates();
       return null;
     });
   }

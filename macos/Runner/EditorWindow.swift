@@ -57,7 +57,7 @@ final class EditorWindow: NSWindow, NSWindowDelegate {
 
     super.init(
       contentRect: NSRect(origin: .zero, size: Self.defaultContentSize),
-      styleMask: [.titled, .closable, .miniaturizable, .resizable],
+      styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
       backing: .buffered,
       defer: false
     )
@@ -68,14 +68,22 @@ final class EditorWindow: NSWindow, NSWindowDelegate {
     // One Document per Window — merging them into tabs would put two
     // Documents behind one set of window chrome.
     tabbingMode = .disallowed
+    // Same unified, traffic-lights-over-content look as PreferencesWindow.
+    // Title text stays hidden rather than synced to match — an unsynced
+    // native title would draw in whatever text colour the *system's*
+    // light/dark mode implies, which has no relation to Typen's own (Dart-
+    // driven) theme and can end up unreadable against it. The filename lives
+    // in the Dart-drawn title strip instead, which always gets this right.
+    titlebarAppearsTransparent = true
+    titleVisibility = .hidden
 
     contentViewController = controller
     // Adopting a view controller resizes the window down to that view, which
     // has no size of its own yet — so the intended size is set afterwards.
     setContentSize(Self.defaultContentSize)
-    // The title, proxy icon and edited dot are driven from Dart via
-    // `setDocument` so the window reflects the actual document, the way every
-    // other macOS editor behaves.
+    // `representedURL`/`isDocumentEdited`, driven from Dart via
+    // `setDocument`, still matter — the edited dot in the close button and
+    // the Dock still read them even with the title itself hidden.
     title = "Untitled"
     delegate = self
     place(after: previous)
@@ -137,6 +145,13 @@ final class EditorWindow: NSWindow, NSWindowDelegate {
     channel.invokeMethod("windowsChanged", arguments: windows)
   }
 
+  /// A setting changed in the Preferences window (or another Editor); this
+  /// one's own in-memory copy is now stale.
+  func notifySettingsChanged() {
+    guard dartReady else { return }
+    channel.invokeMethod("settingsChanged", arguments: nil)
+  }
+
   /// Asks this window's Document whether it may go, answering true when there
   /// is nothing to lose.
   func confirmClose(_ done: @escaping (Bool) -> Void) {
@@ -187,6 +202,11 @@ final class EditorWindow: NSWindow, NSWindowDelegate {
 
     case "newWindow":
       app.newWindow()
+      result(nil)
+
+    case "openPreferences":
+      let checkUpdates = (call.arguments as? [String: Any])?["checkUpdates"] as? Bool ?? false
+      app.showPreferences(checkUpdates: checkUpdates)
       result(nil)
 
     case "closeWindow":

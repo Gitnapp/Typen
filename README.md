@@ -50,21 +50,26 @@ That model is gone. `test/document_codec_test.dart` now asserts byte-exact round
 
 ```
 lib/
-├── main.dart                        # App shell, save flow, menus, native handlers
+├── main.dart                        # Editor window shell, save flow, menus, native handlers
 ├── document_file.dart               # Byte-faithful read/write (BOM, EOL, encoding, atomic)
-├── native.dart                      # The one platform channel
+├── native.dart                      # Per-window platform channel (Editor + Preferences)
 ├── store.dart                       # Recents (+ sandbox bookmarks), cursor memory, settings
 ├── find.dart                        # Find & replace engine (pure logic)
+├── update_checker.dart              # GitHub latest-release check
 ├── theme.dart                       # Light + dark palettes as a ThemeExtension
 └── widgets/
     ├── editor_pane.dart             # Source editor ↔ read-only preview
     ├── markdown_highlighter.dart    # Markdown highlighting over plain text
     ├── find_bar.dart
-    └── settings_sheet.dart
+    ├── preferences_window.dart      # Preferences window shell (sidebar + card pages)
+    ├── settings_controls.dart       # Shared segmented/slider controls
+    ├── dialog_shell.dart            # Shared confirm/action dialog chrome
+    └── update_dialog.dart
 
 macos/Runner/
-├── AppDelegate.swift                # Quit guard, document open, bookmarks, atomic write
-└── MainFlutterWindow.swift          # Window frame autosave, close guard
+├── AppDelegate.swift                # Window registry, quit guard, bookmarks, atomic write
+├── EditorWindow.swift               # One Window, one Document, one Flutter engine
+└── PreferencesWindow.swift          # Singleton settings window, its own Flutter engine
 ```
 
 ## Development

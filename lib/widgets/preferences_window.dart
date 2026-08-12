@@ -1,0 +1,515 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../native.dart';
+import '../store.dart';
+import '../theme.dart';
+import '../update_checker.dart';
+import 'settings_controls.dart';
+import 'update_dialog.dart';
+
+/// The Preferences window's engine boots straight into this — see `main()`
+/// and `docs/adr/0001-per-window-flutter-engine.md`. It runs independently
+/// of every Editor Window's engine, so a change made here is pushed out via
+/// `Native.notifySettingsChanged()` rather than being visible on its own.
+class PreferencesApp extends StatelessWidget {
+  const PreferencesApp({super.key, required this.stores});
+  final Stores stores;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: stores.settings,
+      builder: (context, _) => MaterialApp(
+        title: '偏好设置',
+        debugShowCheckedModeBanner: false,
+        theme: buildAppTheme(AppPalette.light),
+        darkTheme: buildAppTheme(AppPalette.dark),
+        themeMode: stores.settings.themeMode,
+        home: PreferencesHome(settings: stores.settings),
+      ),
+    );
+  }
+}
+
+enum _Category { appearance, about }
+
+class PreferencesHome extends StatefulWidget {
+  const PreferencesHome({super.key, required this.settings});
+  final Settings settings;
+
+  @override
+  State<PreferencesHome> createState() => _PreferencesHomeState();
+}
+
+class _PreferencesHomeState extends State<PreferencesHome> {
+  _Category _category = _Category.appearance;
+  final _aboutKey = GlobalKey<_AboutPageState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // Handlers must be registered before consuming the pending flag, the
+    // same ordering `Native.setHandlers` documents for the Editor Window.
+    Native.setPreferencesHandlers(onCheckUpdates: _runUpdateCheck);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (await Native.consumePendingCheckUpdates()) _runUpdateCheck();
+    });
+  }
+
+  /// Jumps to 关于 and runs its check — the target of both a fresh Window's
+  /// pending flag and an already-open one's native-initiated `checkUpdates`
+  /// call.
+  void _runUpdateCheck() {
+    setState(() => _category = _Category.about);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _aboutKey.currentState?.runCheck();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Scaffold(
+      backgroundColor: p.surface2,
+      body: Row(
+        children: [
+          _Sidebar(
+            selected: _category,
+            onSelect: (c) => setState(() => _category = c),
+          ),
+          Container(width: 1, color: p.border),
+          Expanded(
+            child: switch (_category) {
+              _Category.appearance =>
+                _AppearancePage(settings: widget.settings),
+              _Category.about =>
+                _AboutPage(key: _aboutKey, settings: widget.settings),
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Sidebar ────────────────────────────────────────────────────────────────
+
+class _Sidebar extends StatelessWidget {
+  const _Sidebar({required this.selected, required this.onSelect});
+  final _Category selected;
+  final ValueChanged<_Category> onSelect;
+
+  static const _items = [
+    (_Category.appearance, CupertinoIcons.paintbrush, '外观'),
+    (_Category.about, CupertinoIcons.info, '关于'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      width: 190,
+      color: p.surface1,
+      // The traffic lights sit over this column — the transparent titlebar
+      // means nothing pushes content below them on its own.
+      padding: const EdgeInsets.fromLTRB(10, 36, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (cat, icon, label) in _items)
+            _SidebarItem(
+              icon: icon,
+              label: label,
+              selected: cat == selected,
+              onTap: () => onSelect(cat),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarItem extends StatelessWidget {
+  const _SidebarItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1.5),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+            decoration: BoxDecoration(
+              color: selected ? p.surface3 : Colors.transparent,
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 15,
+                  color: selected ? p.textPrimary : p.textSecondary,
+                ),
+                const SizedBox(width: 9),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: selected ? p.textPrimary : p.textSecondary,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Shared page chrome ─────────────────────────────────────────────────────
+
+class _PageScaffold extends StatelessWidget {
+  const _PageScaffold({required this.title, required this.sections});
+  final String title;
+  final List<Widget> sections;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(28, 34, 28, 30),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+                color: p.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            for (final section in sections) ...[
+              section,
+              const SizedBox(height: 18),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Section extends StatelessWidget {
+  const _Section({required this.heading, required this.rows});
+  final String heading;
+  final List<Widget> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Text(
+            heading.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.6,
+              color: p.textMuted,
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            color: p.surface0,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: p.border),
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    color: p.border,
+                    indent: 14,
+                    endIndent: 14,
+                  ),
+                rows[i],
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionRow extends StatelessWidget {
+  const _SectionRow({required this.label, required this.child});
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12.5, color: p.textPrimary),
+            ),
+          ),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── 外观 ────────────────────────────────────────────────────────────────────
+
+class _AppearancePage extends StatefulWidget {
+  const _AppearancePage({required this.settings});
+  final Settings settings;
+
+  @override
+  State<_AppearancePage> createState() => _AppearancePageState();
+}
+
+class _AppearancePageState extends State<_AppearancePage> {
+  void _commit(VoidCallback change) {
+    setState(change);
+    Native.notifySettingsChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.settings;
+    return _PageScaffold(
+      title: '外观',
+      sections: [
+        _Section(
+          heading: '显示',
+          rows: [
+            _SectionRow(
+              label: '主题',
+              child: SettingsSegmented<ThemeMode>(
+                value: s.themeMode,
+                options: const {
+                  ThemeMode.system: '跟随系统',
+                  ThemeMode.light: '浅色',
+                  ThemeMode.dark: '深色',
+                },
+                onChanged: (v) => _commit(() => s.themeMode = v),
+              ),
+            ),
+          ],
+        ),
+        _Section(
+          heading: '编辑器',
+          rows: [
+            _SectionRow(
+              label: '字号',
+              child: SettingsSlider(
+                value: s.fontSize,
+                min: Settings.minFontSize,
+                max: Settings.maxFontSize,
+                display: s.fontSize.toStringAsFixed(0),
+                onChanged: (v) => setState(() => s.fontSize = v),
+                onChangeEnd: (_) => Native.notifySettingsChanged(),
+              ),
+            ),
+            _SectionRow(
+              label: '列宽',
+              child: SettingsSlider(
+                value: s.columnWidth,
+                min: Settings.minColumnWidth,
+                max: Settings.maxColumnWidth,
+                display: s.columnWidth.toStringAsFixed(0),
+                onChanged: (v) => setState(() => s.columnWidth = v),
+                onChangeEnd: (_) => Native.notifySettingsChanged(),
+              ),
+            ),
+            _SectionRow(
+              label: '字体',
+              child: SettingsSegmented<bool>(
+                value: s.proportionalEditorFont,
+                options: const {false: '等宽', true: '比例'},
+                onChanged: (v) => _commit(() => s.proportionalEditorFont = v),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ─── 关于 ────────────────────────────────────────────────────────────────────
+
+class _AboutPage extends StatefulWidget {
+  const _AboutPage({super.key, required this.settings});
+  final Settings settings;
+
+  @override
+  State<_AboutPage> createState() => _AboutPageState();
+}
+
+class _AboutPageState extends State<_AboutPage> {
+  String _version = '';
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    PackageInfo.fromPlatform().then((info) {
+      if (mounted) setState(() => _version = info.version);
+    });
+  }
+
+  /// Runs a check and shows its result — triggered either by the button
+  /// below or, via `PreferencesHome`, by the native side (the manual
+  /// "检查更新…" menu item, or an auto-discovered release on launch).
+  Future<void> runCheck() async {
+    if (_checking) return;
+    setState(() => _checking = true);
+    try {
+      final release = await const UpdateChecker().fetchLatest();
+      if (!mounted) return;
+      if (release == null) {
+        await showUpToDateDialog(context, failed: true);
+        return;
+      }
+      final isNewer = isNewerVersion(release.tagName, _version);
+      if (!mounted) return;
+      if (!isNewer) {
+        await showUpToDateDialog(context, failed: false);
+        return;
+      }
+      await showUpdateDialog(
+        context,
+        release,
+        onSkip: (tag) => widget.settings.skippedUpdateTag = tag,
+      );
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return _PageScaffold(
+      title: '关于',
+      sections: [
+        _Section(
+          heading: 'Typen',
+          rows: [
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: p.surface2,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'T',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: p.gold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Typen',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: p.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          _version.isEmpty ? ' ' : 'v$_version',
+                          style: TextStyle(fontSize: 11.5, color: p.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _checking ? null : runCheck,
+                    child: Text(
+                      _checking ? '检查中…' : '检查更新…',
+                      style: TextStyle(color: p.gold, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        _Section(
+          heading: '链接',
+          rows: [
+            _SectionRow(
+              label: 'GitHub',
+              child: GestureDetector(
+                onTap: () => launchUrl(
+                  Uri.parse('https://github.com/Gitnapp/Typen'),
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: Text(
+                  'Gitnapp/Typen',
+                  style: TextStyle(fontSize: 12.5, color: p.gold),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}

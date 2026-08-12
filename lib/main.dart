@@ -10,15 +10,24 @@ import 'native.dart';
 import 'store.dart';
 import 'theme.dart';
 import 'update_checker.dart';
+import 'widgets/dialog_shell.dart';
 import 'widgets/editor_pane.dart';
 import 'widgets/find_bar.dart';
 import 'widgets/markdown_highlighter.dart';
-import 'widgets/settings_sheet.dart';
-import 'widgets/update_dialog.dart';
+import 'widgets/preferences_window.dart';
 
-Future<void> main() async {
+/// Every Window boots its own engine from scratch (see
+/// `docs/adr/0001-per-window-flutter-engine.md`), so which UI it shows is
+/// decided here, from the entrypoint arguments `PreferencesWindow.swift`
+/// sets on its `FlutterDartProject` — there is no shared router.
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(TypenApp(stores: await Stores.open()));
+  final stores = await Stores.open();
+  if (args.contains('--preferences')) {
+    runApp(PreferencesApp(stores: stores));
+  } else {
+    runApp(TypenApp(stores: stores));
+  }
 }
 
 class TypenApp extends StatelessWidget {
@@ -115,6 +124,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
       onWindowsChanged: (windows) {
         if (mounted) setState(() => _windows = windows);
       },
+      onSettingsChanged: () => widget.stores.settings.refresh(),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdates());
@@ -360,13 +370,14 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     _modalOpen = true;
     try {
       final name = _activePath == null ? 'Untitled' : p.basename(_activePath!);
-      return await _dialog<_DirtyAction>(
+      return await showAppDialog<_DirtyAction>(
+        context,
         title: '有未保存的修改',
         body: '「$name」已修改但未保存。要怎么处理？',
-        actions: (p) => [
-          ('取消', p.textSecondary, _DirtyAction.cancel),
-          ('放弃', p.coral, _DirtyAction.discard),
-          ('保存', p.gold, _DirtyAction.save),
+        actions: const [
+          DialogAction('取消', DialogActionKind.secondary, _DirtyAction.cancel),
+          DialogAction('放弃', DialogActionKind.destructive, _DirtyAction.discard),
+          DialogAction('保存', DialogActionKind.primary, _DirtyAction.save),
         ],
       );
     } finally {
@@ -382,15 +393,16 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     if (now == null || _diskStamp == null || _diskStamp!.matches(now)) {
       return true;
     }
-    if (_modalOpen) return false;
+    if (_modalOpen || !mounted) return false;
     _modalOpen = true;
     try {
-      final choice = await _dialog<bool>(
+      final choice = await showAppDialog<bool>(
+        context,
         title: '文件已被其他程序修改',
         body: '「${p.basename(path)}」在磁盘上的内容比你打开时更新。继续保存会覆盖那些修改。',
-        actions: (p) => [
-          ('取消', p.textSecondary, false),
-          ('仍然覆盖', p.coral, true),
+        actions: const [
+          DialogAction('取消', DialogActionKind.secondary, false),
+          DialogAction('仍然覆盖', DialogActionKind.destructive, true),
         ],
       );
       return choice ?? false;
@@ -411,14 +423,16 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
       await _reload(path);
       return;
     }
+    if (!mounted) return;
     _modalOpen = true;
     try {
-      final reload = await _dialog<bool>(
+      final reload = await showAppDialog<bool>(
+        context,
         title: '文件已在别处被修改',
         body: '「${p.basename(path)}」的磁盘内容变了，而你这里也有未保存的修改。',
-        actions: (p) => [
-          ('保留我的修改', p.textSecondary, false),
-          ('放弃并重新载入', p.coral, true),
+        actions: const [
+          DialogAction('保留我的修改', DialogActionKind.secondary, false),
+          DialogAction('放弃并重新载入', DialogActionKind.destructive, true),
         ],
       );
       if (reload == true) await _reload(path);
@@ -430,48 +444,35 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
   // ─── Update check ───────────────────────────────────────────────────────
   // Every open Window runs its own engine and its own copy of this state, so
   // an automatic check on launch is throttled through Settings — otherwise
-  // opening several Windows at once would fire one GitHub request each.
+  // opening several Windows at once would fire one GitHub request each. All
+  // of the *showing* — the found/up-to-date/failed dialogs — happens in the
+  // Preferences window's 关于 page instead of here, so there is exactly one
+  // place in the app that draws an update dialog. A manual check just
+  // redirects there; the automatic one still runs its own silent probe
+  // first, so a launch with nothing new never pops a window open.
   static const _autoCheckInterval = Duration(hours: 20);
 
   Future<void> _checkForUpdates({bool manual = false}) async {
-    final settings = widget.stores.settings;
-    if (!manual) {
-      final last = settings.lastUpdateCheckAt;
-      if (last != null && DateTime.now().difference(last) < _autoCheckInterval) {
-        return;
-      }
+    if (manual) {
+      Native.openPreferencesAndCheckUpdates();
+      return;
     }
-    if (_modalOpen) return;
+
+    final settings = widget.stores.settings;
+    final last = settings.lastUpdateCheckAt;
+    if (last != null && DateTime.now().difference(last) < _autoCheckInterval) {
+      return;
+    }
 
     settings.lastUpdateCheckAt = DateTime.now();
     final release = await const UpdateChecker().fetchLatest();
-    if (!mounted) return;
-
-    if (release == null) {
-      if (manual) await showUpToDateDialog(context, failed: true);
-      return;
-    }
+    if (release == null || !mounted) return;
 
     final currentVersion = (await PackageInfo.fromPlatform()).version;
-    if (!mounted) return;
-    final isNewer = isNewerVersion(release.tagName, currentVersion);
-    if (!isNewer) {
-      if (manual) await showUpToDateDialog(context, failed: false);
-      return;
-    }
-    if (!manual && release.tagName == settings.skippedUpdateTag) return;
-    if (!mounted || _modalOpen) return;
+    if (!mounted || !isNewerVersion(release.tagName, currentVersion)) return;
+    if (release.tagName == settings.skippedUpdateTag) return;
 
-    _modalOpen = true;
-    try {
-      await showUpdateDialog(
-        context,
-        release,
-        onSkip: (tag) => settings.skippedUpdateTag = tag,
-      );
-    } finally {
-      _modalOpen = false;
-    }
+    Native.openPreferencesAndCheckUpdates();
   }
 
   Future<void> _reload(String path) async {
@@ -493,47 +494,6 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     } catch (err) {
       _reportError('重新载入失败：$err');
     }
-  }
-
-  Future<T?> _dialog<T>({
-    required String title,
-    required String body,
-    required List<(String, Color, T)> Function(AppPalette) actions,
-  }) {
-    return showDialog<T>(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black54,
-      builder: (ctx) {
-        final p = ctx.palette;
-        return AlertDialog(
-          backgroundColor: p.surface1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: p.border),
-          ),
-          title: Text(
-            title,
-            style: TextStyle(
-              color: p.textPrimary,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          content: Text(
-            body,
-            style: TextStyle(color: p.textSecondary, fontSize: 13, height: 1.5),
-          ),
-          actions: [
-            for (final (label, color, value) in actions(p))
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, value),
-                child: Text(label, style: TextStyle(color: color)),
-              ),
-          ],
-        );
-      },
-    );
   }
 
   // ─── Find & replace ───────────────────────────────────────────────────────
@@ -699,6 +659,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
           body: Column(
             children: [
               _TitleBar(
+                title: _activePath == null ? 'Untitled' : p.basename(_activePath!),
                 status: _status,
                 errorMsg: _errorMsg,
                 encoding: _encoding,
@@ -777,8 +738,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
                 LogicalKeyboardKey.comma,
                 meta: true,
               ),
-              onSelected: () =>
-                  showSettingsSheet(context, widget.stores.settings),
+              onSelected: Native.openPreferences,
             ),
           ],
         ),
@@ -1071,6 +1031,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
 
 class _TitleBar extends StatelessWidget {
   const _TitleBar({
+    required this.title,
     required this.status,
     required this.errorMsg,
     required this.encoding,
@@ -1078,6 +1039,7 @@ class _TitleBar extends StatelessWidget {
     required this.onToggleMode,
   });
 
+  final String title;
   final SaveStatus status;
   final String? errorMsg;
   final DocumentEncoding encoding;
@@ -1088,11 +1050,23 @@ class _TitleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return Container(
-      height: 32,
+      height: 58,
       color: p.surface0,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      // The real title bar is transparent and the traffic lights float over
+      // this strip's top ~28px — see `EditorWindow.swift` — so that much is
+      // reserved before anything is drawn.
+      padding: const EdgeInsets.fromLTRB(14, 28, 14, 0),
       child: Row(
         children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: p.textPrimary,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 14),
           if (encoding.eol == LineEnding.crlf) const _Badge('CRLF'),
           if (!encoding.isUtf8) const _Badge('Latin-1'),
           if (encoding.hasBom) const _Badge('BOM'),

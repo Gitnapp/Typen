@@ -88,11 +88,12 @@ void main() {
   setUp(() => dir = Directory.systemTemp.createTempSync('typen_home'));
   tearDown(() => dir.deleteSync(recursive: true));
 
-  Future<void> boot(WidgetTester tester) async {
+  Future<Stores> boot(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final stores = await Stores.open();
     await tester.pumpWidget(TypenApp(stores: stores));
     await flush(tester);
+    return stores;
   }
 
   File seed(String content, {String name = 'note.md'}) =>
@@ -227,6 +228,23 @@ void main() {
     // No checkmark exists on a PlatformMenuItem, so the key window is marked
     // in its label.
     expect(menuLabels('窗口'), ['✓ note.md', 'Untitled']);
+  }, variant: onMacOS);
+
+  testWidgets(
+      'a settingsChanged broadcast makes this Window re-read Settings from '
+      'the platform store', (tester) async {
+    final stores = await boot(tester);
+    expect(stores.settings.fontSize, 15.0);
+
+    // A different Window's engine wrote this — SharedPreferences caches per
+    // isolate, so this Window's own copy stays stale until it reloads.
+    SharedPreferences.setMockInitialValues({'font_size': 20.0});
+    expect(stores.settings.fontSize, 15.0, reason: 'stale until told to reload');
+
+    callFromNative('settingsChanged');
+    await flush(tester);
+
+    expect(stores.settings.fontSize, 20.0);
   }, variant: onMacOS);
 
   testWidgets(

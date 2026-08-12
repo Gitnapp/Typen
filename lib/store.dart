@@ -200,6 +200,16 @@ class Settings extends ChangeNotifier {
   String? get skippedUpdateTag => _prefs.getString('skipped_update_tag');
 
   set skippedUpdateTag(String v) => _prefs.setString('skipped_update_tag', v);
+
+  /// Re-reads every value from the platform's preferences store. Each Window
+  /// runs its own engine with its own `SharedPreferences` cache, so a change
+  /// made in one (the Preferences window, another Window) never appears here
+  /// on its own — the native side calls this in response to its
+  /// `settingsChanged` broadcast.
+  Future<void> refresh() async {
+    await _prefs.reload();
+    notifyListeners();
+  }
 }
 
 class Stores {

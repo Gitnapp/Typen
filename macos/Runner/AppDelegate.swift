@@ -10,6 +10,11 @@ class AppDelegate: FlutterAppDelegate {
   private var windows: [EditorWindow] = []
   private var nextWindowID = 1
 
+  /// The Preferences window, if one is open. A singleton kept outside
+  /// `windows` — it carries no Document, so none of that registry's policies
+  /// (dedup, quit sequencing, the Window menu) apply to it.
+  private var preferencesWindow: PreferencesWindow?
+
   /// Security-scoped URLs we currently hold access to, keyed by path. Access
   /// must be balanced with `stopAccessingSecurityScopedResource`, and the same
   /// path can be reached from more than one window over time — so a release is
@@ -141,6 +146,31 @@ class AppDelegate: FlutterAppDelegate {
   private var frontmostWindow: EditorWindow? {
     NSApp.orderedWindows.first { $0 is EditorWindow } as? EditorWindow
       ?? windows.last
+  }
+
+  // ─── Preferences ─────────────────────────────────────────────────────────
+
+  func showPreferences(checkUpdates: Bool = false) {
+    if let window = preferencesWindow {
+      window.makeKeyAndOrderFront(nil)
+      if checkUpdates { window.requestUpdateCheck() }
+      return
+    }
+    let window = PreferencesWindow(app: self, checkUpdatesOnReady: checkUpdates)
+    preferencesWindow = window
+    window.makeKeyAndOrderFront(nil)
+  }
+
+  func preferencesWindowClosed() {
+    preferencesWindow = nil
+  }
+
+  /// A setting changed in some Window — every other Window runs its own
+  /// engine with its own cached copy of it, so each is told to re-read it.
+  /// Mirrors `windowsChanged()`: same reason (per-window channel instances),
+  /// same shape.
+  func settingsChanged() {
+    for window in windows { window.notifySettingsChanged() }
   }
 
   // ─── Never quit on top of unsaved work ───────────────────────────────────

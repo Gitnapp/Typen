@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../theme.dart';
 import '../update_checker.dart';
+import 'dialog_shell.dart';
 
 enum _UpdateAction { download, skip, later }
 
@@ -14,81 +15,15 @@ Future<void> showUpdateDialog(
   GitHubRelease release, {
   required void Function(String tag) onSkip,
 }) async {
-  final action = await showDialog<_UpdateAction>(
-    context: context,
-    barrierColor: Colors.black38,
-    builder: (_) => _UpdateDialog(release: release),
-  );
-  if (action == _UpdateAction.download) {
-    await launchUrl(Uri.parse(release.htmlUrl), mode: LaunchMode.externalApplication);
-  } else if (action == _UpdateAction.skip) {
-    onSkip(release.tagName);
-  }
-}
-
-/// Shows the "you're up to date" / "check failed" result of a manual check.
-Future<void> showUpToDateDialog(BuildContext context, {required bool failed}) {
-  return showDialog(
-    context: context,
-    barrierColor: Colors.black38,
-    builder: (context) {
-      final p = context.palette;
-      return AlertDialog(
-        backgroundColor: p.surface1,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: p.border),
-        ),
-        title: Text(
-          failed ? '检查更新失败' : '已是最新版本',
-          style: TextStyle(
-            color: p.textPrimary,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: Text(
-          failed ? '无法连接到 GitHub，请稍后再试。' : 'Typen 当前已经是最新版本。',
-          style: TextStyle(color: p.textSecondary, fontSize: 12.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('好', style: TextStyle(color: p.gold)),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-class _UpdateDialog extends StatelessWidget {
-  const _UpdateDialog({required this.release});
-  final GitHubRelease release;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final notes = release.body.trim();
-
-    return AlertDialog(
-      backgroundColor: p.surface1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: p.border),
-      ),
-      contentPadding: const EdgeInsets.fromLTRB(22, 20, 22, 8),
-      title: Text(
-        '发现新版本',
-        style: TextStyle(
-          color: p.textPrimary,
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      content: SizedBox(
-        width: 380,
-        child: Column(
+  final notes = release.body.trim();
+  final action = await showAppDialog<_UpdateAction>(
+    context,
+    title: '发现新版本',
+    barrierDismissible: true,
+    content: Builder(
+      builder: (context) {
+        final p = context.palette;
+        return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -116,25 +51,30 @@ class _UpdateDialog extends StatelessWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 4),
           ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () =>
-              Navigator.pop(context, _UpdateAction.skip),
-          child: Text('跳过此版本', style: TextStyle(color: p.textMuted)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _UpdateAction.later),
-          child: Text('以后再说', style: TextStyle(color: p.textSecondary)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _UpdateAction.download),
-          child: Text('前往下载', style: TextStyle(color: p.gold)),
-        ),
-      ],
-    );
+        );
+      },
+    ),
+    actions: const [
+      DialogAction('跳过此版本', DialogActionKind.plain, _UpdateAction.skip),
+      DialogAction('以后再说', DialogActionKind.secondary, _UpdateAction.later),
+      DialogAction('前往下载', DialogActionKind.primary, _UpdateAction.download),
+    ],
+  );
+  if (action == _UpdateAction.download) {
+    await launchUrl(Uri.parse(release.htmlUrl), mode: LaunchMode.externalApplication);
+  } else if (action == _UpdateAction.skip) {
+    onSkip(release.tagName);
   }
+}
+
+/// Shows the "you're up to date" / "check failed" result of a manual check.
+Future<void> showUpToDateDialog(BuildContext context, {required bool failed}) {
+  return showAppDialog<void>(
+    context,
+    barrierDismissible: true,
+    title: failed ? '检查更新失败' : '已是最新版本',
+    body: failed ? '无法连接到 GitHub，请稍后再试。' : 'Typen 当前已经是最新版本。',
+    actions: const [DialogAction('好', DialogActionKind.primary, null)],
+  );
 }

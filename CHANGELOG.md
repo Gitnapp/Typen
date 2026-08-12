@@ -1,5 +1,56 @@
 # CHANGELOG
 
+## [2026-08-12] v0.3.5 —— 独立偏好设置窗口 + 统一弹窗风格
+
+### 偏好设置改成独立原生窗口
+
+原来的"偏好设置"是编辑器窗口里弹出的一个 `AlertDialog`。现在是一个真正独立的 macOS 窗口：侧边栏多分类导航（外观 / 关于）+ 卡片分组的设置项，标题栏做成沉浸式（去掉不透明标题条，红黄绿按钮悬浮在内容之上）——编辑器窗口的标题栏也统一改成了同样的沉浸风格，两种窗口不再一个有一个没有。
+
+**架构上**：这个窗口是同一套"每窗口一个 Flutter 引擎"模型的第三种实例（此前只有编辑器窗口一种），通过 `FlutterDartProject.dartEntrypointArguments` 传 `--preferences` 参数区分——`main(List<String> args)` 据此决定这个引擎该跑 `TypenApp`（编辑器）还是 `PreferencesApp`（偏好设置），而不是给它单独写一个 Dart entrypoint 函数（后者在 release 构建下会被 tree-shaking 摇掉，除非手动打 `@pragma('vm:entry-point')`，属于本可以绕开的坑）。它是单例，生命周期由 `AppDelegate` 管理但不进 `windows` 注册表——不参与去重、Window 菜单、退出确认这些只有"文档窗口"才需要的策略。
+
+**跨窗口设置同步**：每个窗口引擎都有自己独立的 `SharedPreferences` 内存缓存，在偏好设置里改一项设置，不会让已经打开的编辑器窗口自动看到——这是原有 ADR（`docs/adr/0001-per-window-flutter-engine.md`）里写明的已知代价。这次补上了一条广播：偏好设置发生改动后原生层通知每个编辑器窗口的引擎调用 `Settings.refresh()`（`SharedPreferences.reload()` + `notifyListeners()`），一秒内跟着变。
+
+**代价**：标题栏文字隐藏后，原生的"标题栏图标拖拽存到 Finder"和"⌘点击标题弹出路径面包屑"这两个系统级功能在编辑器窗口上跟着没了——文件名现在只在下面 Dart 画的状态条里显示。
+
+**改动/新增文件：**
+- `macos/Runner/PreferencesWindow.swift`（新增）—— 独立窗口 + 独立引擎 + 独立 `typen/native` 通道，只处理 `closeWindow`/`settingsChanged`/`consumePendingCheckUpdates` 这几个精简过的方法
+- `macos/Runner/AppDelegate.swift` —— `showPreferences()` 单例创建/前置，`settingsChanged()` 广播循环
+- `macos/Runner/EditorWindow.swift` —— 沉浸式标题栏（`titlebarAppearsTransparent` + `fullSizeContentView` + 隐藏标题），新增 `openPreferences`/`notifySettingsChanged` 处理
+- `lib/widgets/preferences_window.dart`（新增）—— 侧边栏 + 卡片布局的 Dart UI
+- `lib/main.dart` —— `main()` 按 entrypoint 参数分流；标题栏 strip 顶部让出沉浸区，补上文件名显示
+- `lib/store.dart` —— `Settings.refresh()`
+
+### ⌘W 只关当前窗口，不再误关背景编辑器
+
+菜单栏属于最后一次渲染它的那个编辑器引擎（`PlatformMenuBar` 每次重建都会整个替换 `NSApp.mainMenu`），偏好设置窗口没有自己的菜单栏。如果不处理，偏好设置聚焦时按 ⌘W，会顺着菜单栏残留的绑定误关到背景里的编辑器窗口，而不是关掉眼前这个。`PreferencesWindow` 重写了 `performKeyEquivalent` 拦截 ⌘W 提前处理，实机验证过：偏好设置聚焦按 ⌘W 只关自己，编辑器不受影响；⌘Q 时哪怕偏好设置开着，该走的未保存确认流程照走不误。
+
+### 检查更新统一走偏好设置
+
+"检查更新…"菜单项原来会在编辑器窗口弹一个独立的 `AlertDialog`，和新版偏好设置的视觉体系脱节。现在手动检查、以及启动时的静默自动检查一旦发现新版本，都会打开（或前置）偏好设置窗口，跳到"关于"页面里显示结果——应用里只有一处会画"检查更新"相关的弹窗。静默检查本身仍然只在编辑器引擎里跑（不合并到偏好设置，否则装了新版本没有的情况也会弹窗），确认真有更新才转过去。
+
+注意：这意味着如果启动时自动发现新版本，偏好设置窗口现在会不打招呼地自己弹出来——这是本次统一弹窗风格的直接结果。
+
+**改动文件：**
+- `lib/main.dart` —— `_checkForUpdates` 简化成"手动直接转发 / 自动仍先静默探测再决定要不要转发"
+- `lib/native.dart` —— `openPreferencesAndCheckUpdates`、`consumePendingCheckUpdates`、`setPreferencesHandlers`
+- `macos/Runner/PreferencesWindow.swift` / `EditorWindow.swift` —— 对称的 pending-flag 握手（照抄 `pendingPaths`/`dartReady`/`consumePendingOpens` 那一套，用在"偏好设置窗口还没启动完，检查更新的请求先存起来"这个场景）
+
+### 所有确认弹窗换了一套统一样式
+
+有未保存的修改 / 文件被其他程序修改 / 文件在别处被修改 / 检查更新结果，这几个原来各写各的 `AlertDialog`，现在共用一套卡片：无边框+阴影，标题加大加粗，按钮分三种——填充色的主操作、描边的次要操作、纯文字的破坏性操作单独挪到最左边和其余按钮拉开距离（不会因为手滑点错挨在一起的按钮），主按钮的文字颜色按当前是深色还是浅色主题取黑或取白，保证金色底色上的对比度。
+
+**新增文件：**
+- `lib/widgets/dialog_shell.dart` —— `showAppDialog` + `DialogAction`/`DialogActionKind`，全应用弹窗共用
+
+**改动文件：**
+- `lib/main.dart` —— 删掉本地的 `_dialog<T>` helper，三处调用改走共享的 `showAppDialog`
+- `lib/widgets/update_dialog.dart` —— 同样改走共享 helper，删掉不再需要的 `_UpdateDialog` 类
+
+### 验证
+
+- `flutter analyze` 0 issue，`flutter test` 72 个测试全过（新增一个用真实 `SharedPreferences` 存储验证 `settingsChanged` 广播确实触发了 reload，而不是碰巧通过）
+- 实机验证：偏好设置开关/单例/跨窗口设置同步（拖动字号滑块后编辑器窗口跟着变）、⌘W 只关偏好设置、⌘Q 在偏好设置开着时仍能正确走完未保存确认再退出、"检查更新…"菜单项正确跳转到偏好设置"关于"页并显示"已是最新版本"、三种按钮样式的确认弹窗实际显示效果
+
 ## [2026-08-12] v0.3.4 —— 修复预览滚动条真正的抖动根因
 
 v0.3.3 修的是源码视图在触控板回弹（overscroll）时的滚动条抖动——这个是真的，但不是用户实际看到的那个。用真实的 scroll metrics 打日志实测后发现：**预览**模式下滚动混合内容（标题/代码块/列表穿插的文档），`maxScrollExtent` 在滚动过程中持续跳动（同一份文档反复在 5071~5615 之间变化），滑块长度跟着抖——这才是"滚动条长度随滚动变化"的真正来源。
