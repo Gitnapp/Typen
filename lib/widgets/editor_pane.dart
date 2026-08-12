@@ -104,6 +104,15 @@ class EditorPane extends StatelessWidget {
           undoController: undoController,
           focusNode: focusNode,
           scrollController: scrollController,
+          // Ambient physics on macOS is BouncingScrollPhysics, which lets
+          // `pixels` legitimately sit outside [min, max] for a few frames
+          // during rubber-band/spring-back at the document's ends. Scrollbar
+          // recomputes its thumb's length every frame with no smoothing, and
+          // its overscroll branch shrinks/grows the thumb on each of those
+          // frames — that reads as the thumb flickering. Clamping physics
+          // keeps `pixels` inside [min, max] at all times, so the thumb stays
+          // a stable function of viewportDimension/maxScrollExtent.
+          scrollPhysics: const ClampingScrollPhysics(),
           scrollPadding: const EdgeInsets.symmetric(vertical: 80),
           maxLines: null,
           expands: true,
@@ -171,15 +180,23 @@ class EditorPane extends StatelessWidget {
           controller: previewScrollController,
           child: ScrollConfiguration(
             behavior: const _NoScrollbarBehavior(),
-            child: Markdown(
-              controller: previewScrollController,
-              data: stripFrontMatter(controller.text),
-              selectable: true,
-              padding: EdgeInsets.fromLTRB(side, 24, side, 60),
-              extensionSet: md.ExtensionSet.gitHubWeb,
-              styleSheet: _styleSheet(palette),
-              imageBuilder: _buildImage,
-              onTapLink: (text, href, title) => _openLink(href),
+            // flutter_markdown_plus's own `selectable: true` gives every block
+            // (paragraph, heading, list item, ...) its own independent
+            // SelectableText, so a drag never crosses a block boundary.
+            // SelectionArea instead makes every Text.rich it wraps share one
+            // continuous selection — which needs `selectable: false` here so
+            // the package doesn't wrap things in its own SelectableText too.
+            child: SelectionArea(
+              child: Markdown(
+                controller: previewScrollController,
+                data: stripFrontMatter(controller.text),
+                selectable: false,
+                padding: EdgeInsets.fromLTRB(side, 24, side, 60),
+                extensionSet: md.ExtensionSet.gitHubWeb,
+                styleSheet: _styleSheet(palette),
+                imageBuilder: _buildImage,
+                onTapLink: (text, href, title) => _openLink(href),
+              ),
             ),
           ),
         ),

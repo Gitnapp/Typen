@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [2026-08-12] v0.3.3 —— 修复滚动条闪动 + 预览跨段落选中
+
+### 源码视图滚动时滚动条高度闪动
+
+macOS 触控板的两指滚动会经过 drag/ballistic 手势管线，而不是离散滚轮走的那条被夹住范围的路径，所以滚到文档顶部/底部触发回弹（rubber-band）时，`pixels` 会有几帧短暂越出 `[minScrollExtent, maxScrollExtent]`。`Scrollbar` 每一帧都直接按当前 `ScrollMetrics` 重新计算滚动条滑块长度、不做平滑处理，回弹期间的越界让滑块长度跟着每帧抖动——看起来就是"高度闪动"。
+
+**改动文件：**
+- `lib/widgets/editor_pane.dart` —— 源码编辑器的 `TextField` 显式指定 `scrollPhysics: const ClampingScrollPhysics()`，不再用 macOS 默认的 `BouncingScrollPhysics`，`pixels` 全程留在合法范围内，滑块长度就只是 `viewportDimension`/`maxScrollExtent` 的稳定函数
+
+### 预览模式无法跨段落拖选文字
+
+`flutter_markdown_plus` 的 `selectable: true`会给每个块级元素（段落、标题、列表项……）各自套一个独立的 `SelectableText`，互相之间没有共享选区，拖选天然出不了当前块。
+
+**改动文件：**
+- `lib/widgets/editor_pane.dart` —— 预览的 `Markdown` 改成 `selectable: false`，外层套 Flutter 自带的 `SelectionArea`，所有渲染出来的 `Text.rich` 就共享同一个连续选区；链接点击不受影响（`TapGestureRecognizer` 挂在 `TextSpan` 上，和 `SelectionArea` 互不冲突）
+
+**验证：**
+- `flutter analyze` 0 issue，`flutter test` 71 个测试全过
+- 实机验证：预览里拖选跨越两个段落，⌘C 复制出的剪贴板内容确认连续；源码视图滚动到长文档顶部，滑块渲染正常、位置和长度符合预期
+
 ## [2026-08-12] v0.3.2 —— Developer ID 签名 + 公证
 
 发布版本现在用 Developer ID Application 证书签名并提交 Apple 公证，下载后的 `Typen.app` 不再被 Gatekeeper 拦截。
