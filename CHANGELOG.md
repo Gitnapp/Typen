@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## [2026-08-12] v0.3.6 —— 一键更新 + 圆角统一
+
+### 一键更新
+
+"检查更新…"发现新版本后，"立即更新"不再只是跳浏览器到 GitHub 发布页——现在是应用内下载、解压、校验、安装、重启一条龙。
+
+**流程**：从 release 的 `assets[]` 里找到 `Typen-vX.Y.Z.zip`（`GitHubRelease` 之前只解析 `tag_name`/`name`/`html_url`/`body`，这次补上了 `assets`）→ 流式下载到沙盒容器自己的临时目录（"关于"页内联显示"下载中… N%"）→ `ditto -x -k` 原地解压（不用纯 Dart 的 `archive` 包——Typen.app 的 Frameworks 里有 `Versions/Current` 符号链接和精确的可执行位，纯 Dart 解压不保证原样恢复，装出来的 App 签名会碎，正好被下一步的签名校验拦下来）→ 原生 `SecStaticCodeCheckValidity` 校验解压出来的 bundle 确实是这个 App 自己的 Developer ID 签名（唯一真正的安全边界，因为下载 URL 本身就是 GitHub API 返回的）→ 安装 → 退出重启到新版本。
+
+**沙盒约束决定了"一键"到哪一步为止**：App Sandbox 下没有"任意路径可写"的权限，`Release.entitlements` 只有 `files.user-selected.read-write`。下载、解压、签名校验全程都在应用自己的容器内完成，不需要任何授权；只有最后替换安装目录（默认 `/Applications`）那一步，会弹出系统原生的文件夹选择面板——这不是一次额外的"确认"弹窗，而是沙盒模型下唯一能拿到写权限的方式（和现有"另存为"用的是同一套 Powerbox 机制）。选定文件夹后，先删再搬（macOS 下删除正在运行的 App 自己的 bundle 是安全的，进程持有的是 inode，不是路径）。
+
+**重启**：原生侧调用 `NSApp.terminate(nil)` 走正常退出流程——如果有编辑器窗口未保存，⌘Q 该有的确认提示照样会跳出来，用户取消的话重启会被跳过（新版本已经装好，等下次手动打开就是新的）。真正退出时（`applicationWillTerminate`）用 `Process` 起一个分离的 `/usr/bin/open -n <新路径>`，而不是 `NSWorkspace.openApplication` 的异步 completion handler——后者的回调有可能在进程真正退出前还没来得及触发。
+
+**改动/新增文件：**
+- `lib/updater.dart`（新增）—— 下载/解压/校验/安装编排，`Updater.run()`
+- `lib/update_checker.dart` —— `GitHubRelease.assets`/`zipAsset`
+- `lib/widgets/update_dialog.dart` —— "前往下载"改成"立即更新"，弹窗只负责问、不再自己 `launchUrl`
+- `lib/widgets/preferences_window.dart` —— "关于"页内联下载进度，替换原来点了就跳浏览器的按钮
+- `macos/Runner/AppDelegate.swift` —— `verifySignature(path:)`、`relaunchAfterQuit(bundlePath:)`
+- `macos/Runner/PreferencesWindow.swift` —— 转发这两个新的 channel 方法
+- `lib/native.dart` —— `Native.verifySignature`、`Native.relaunchAfterQuit`
+
+### 检查更新加固
+
+排查"检查更新有概率卡住"时找到一个确认的 bug：手动点"检查更新…"或者启动时自动发现新版本转过来时，如果偏好设置窗口刚打开、`PackageInfo.fromPlatform()` 还没返回，`_version` 还是空字符串——拿空字符串去和任何 release 版本号比较，永远判定"有更新"。现在 `runCheck()` 里如果 `_version` 还没取到会先等它取到再比较。
+
+没有找到能稳定复现的真正死锁/卡死——多次尝试复现均未成功，本次未能实机走完一遍"点击立即更新→下载→安装→重启"的完整流程，這條鏈路本次只有单元/组件测试覆盖。这条改动定性是"修复一个确认的版本比较 bug + 加固"，不是"复现并修复了卡死"。
+
+### 圆角统一
+
+`theme.dart` 新增两个圆角 token——`kRadiusControl`（8，按钮/分段控件/侧边栏行/输入框这类交互控件，包括它们的 hover/按下状态）、`kRadiusSurface`（14，卡片/弹窗这类大容器）。原来全应用零散用了 4/5/6/7/8/9/10/16 八个不同的数值，现在统一到这两个 token，逐处替换。
+
+### 偏好设置侧边栏 hover 效果
+
+`_SidebarItem` 之前完全没有 hover 反馈，且鼠标样式是手指（`SystemMouseCursors.click`）。现在悬停未选中项会有一层背景色（`surface2`，介于透明和选中态 `surface3` 之间），鼠标样式改成 `SystemMouseCursors.basic`——按明确要求，不用手指光标。
+
+### 验证
+
+- `flutter analyze` 0 issue，`flutter test` 73 个测试全过，新增 `test/preferences_window_test.dart` 用 `TestGesture`（`PointerDeviceKind.mouse`）真实模拟悬停，断言背景色变化和 `MouseRegion.cursor` 的值——本机屏幕当时处于锁定状态，无法用截图验证 UI，改用组件测试代替
+- `flutter build macos --debug` 编译通过；一键更新的下载→解压→签名校验→安装→重启整条链路**本次未做真机验证**，发布前用户已知情并选择跳过
+
 ## [2026-08-12] v0.3.5 —— 独立偏好设置窗口 + 统一弹窗风格
 
 ### 偏好设置改成独立原生窗口

@@ -296,7 +296,7 @@ class EditorPane extends StatelessWidget {
       codeblockPadding: const EdgeInsets.all(14),
       codeblockDecoration: BoxDecoration(
         color: p.surface1,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kRadiusControl),
         border: Border.all(color: p.border),
       ),
       blockquote: TextStyle(

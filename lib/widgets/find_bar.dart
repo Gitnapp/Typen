@@ -199,7 +199,7 @@ class _Field extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: p.surface0,
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(kRadiusControl),
             border: Border.all(color: error ? p.coral : p.border),
           ),
           alignment: Alignment.centerLeft,
@@ -263,7 +263,7 @@ class _IconToggle extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 1),
             decoration: BoxDecoration(
               color: active ? p.surface3 : Colors.transparent,
-              borderRadius: BorderRadius.circular(5),
+              borderRadius: BorderRadius.circular(kRadiusControl),
             ),
             child: icon != null
                 ? Icon(
@@ -304,7 +304,7 @@ class _TextButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: p.surface2,
-            borderRadius: BorderRadius.circular(5),
+            borderRadius: BorderRadius.circular(kRadiusControl),
             border: Border.all(color: p.border),
           ),
           child: Text(

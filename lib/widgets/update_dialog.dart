@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../theme.dart';
 import '../update_checker.dart';
 import 'dialog_shell.dart';
 
-enum _UpdateAction { download, skip, later }
+enum UpdateDialogAction { install, skip, later }
 
-/// Shows the "a new version is available" dialog. Returns once the user has
-/// dismissed it; the caller doesn't need the result — [skippedUpdateTag] is
-/// persisted internally when the user picks "跳过此版本".
-Future<void> showUpdateDialog(
+/// Shows the "a new version is available" dialog and returns what the user
+/// chose. The caller drives the actual download/install (see `Updater` and
+/// `_AboutPage._install`) and persists [skippedUpdateTag] itself — this
+/// dialog only asks.
+Future<UpdateDialogAction?> showUpdateDialog(
   BuildContext context,
-  GitHubRelease release, {
-  required void Function(String tag) onSkip,
-}) async {
+  GitHubRelease release,
+) {
   final notes = release.body.trim();
-  final action = await showAppDialog<_UpdateAction>(
+  return showAppDialog<UpdateDialogAction>(
     context,
     title: '发现新版本',
     barrierDismissible: true,
@@ -56,16 +55,19 @@ Future<void> showUpdateDialog(
       },
     ),
     actions: const [
-      DialogAction('跳过此版本', DialogActionKind.plain, _UpdateAction.skip),
-      DialogAction('以后再说', DialogActionKind.secondary, _UpdateAction.later),
-      DialogAction('前往下载', DialogActionKind.primary, _UpdateAction.download),
+      DialogAction('跳过此版本', DialogActionKind.plain, UpdateDialogAction.skip),
+      DialogAction(
+        '以后再说',
+        DialogActionKind.secondary,
+        UpdateDialogAction.later,
+      ),
+      DialogAction(
+        '立即更新',
+        DialogActionKind.primary,
+        UpdateDialogAction.install,
+      ),
     ],
   );
-  if (action == _UpdateAction.download) {
-    await launchUrl(Uri.parse(release.htmlUrl), mode: LaunchMode.externalApplication);
-  } else if (action == _UpdateAction.skip) {
-    onSkip(release.tagName);
-  }
 }
 
 /// Shows the "you're up to date" / "check failed" result of a manual check.
@@ -75,6 +77,18 @@ Future<void> showUpToDateDialog(BuildContext context, {required bool failed}) {
     barrierDismissible: true,
     title: failed ? '检查更新失败' : '已是最新版本',
     body: failed ? '无法连接到 GitHub，请稍后再试。' : 'Typen 当前已经是最新版本。',
+    actions: const [DialogAction('好', DialogActionKind.primary, null)],
+  );
+}
+
+/// Shows an update-pipeline failure — download, extraction, signature
+/// verification, or install all collapse to this single dialog shape.
+Future<void> showUpdateFailedDialog(BuildContext context, String message) {
+  return showAppDialog<void>(
+    context,
+    barrierDismissible: true,
+    title: '更新失败',
+    body: message,
     actions: const [DialogAction('好', DialogActionKind.primary, null)],
   );
 }

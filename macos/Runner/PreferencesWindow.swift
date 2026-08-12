@@ -89,6 +89,15 @@ final class PreferencesWindow: NSWindow, NSWindowDelegate {
       dartReady = true
       result(pending)
 
+    case "verifySignature":
+      let args = call.arguments as? [String: Any]
+      result(app.verifySignature(path: args?["path"] as? String))
+
+    case "relaunchAfterQuit":
+      let args = call.arguments as? [String: Any]
+      app.relaunchAfterQuit(bundlePath: args?["path"] as? String)
+      result(nil)
+
     default:
       result(FlutterMethodNotImplemented)
     }

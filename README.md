@@ -56,6 +56,7 @@ lib/
 ├── store.dart                       # Recents (+ sandbox bookmarks), cursor memory, settings
 ├── find.dart                        # Find & replace engine (pure logic)
 ├── update_checker.dart              # GitHub latest-release check
+├── updater.dart                     # One-click update: download/extract/verify/install
 ├── theme.dart                       # Light + dark palettes as a ThemeExtension
 └── widgets/
     ├── editor_pane.dart             # Source editor ↔ read-only preview
@@ -100,7 +101,7 @@ and how it works.
 ## Not there yet
 
 - **Single window.** `⌘N` starts a new buffer in the same window rather than opening a second one. Real multi-window needs Flutter's multi-view support.
-- **No DMG or auto-update.** Notarized `.app` only for now — no installer or update mechanism.
+- **No DMG.** Notarized `.app` only for now. Updates are in-app (检查更新…), but the final install step still needs one folder-picker click — App Sandbox has no "write anywhere" entitlement.
 - **No image paste-to-assets, math, or export.** Preview renders local relative-path images; it does not yet help you create them.
 - Mixed CRLF/LF files are the one documented exception to byte fidelity — saving normalises them to the dominant ending, and the title bar says so.
 

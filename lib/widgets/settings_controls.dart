@@ -36,7 +36,7 @@ class SettingsSegmented<T> extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                   decoration: BoxDecoration(
                     color: entry.key == value ? p.surface3 : p.surface2,
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(kRadiusControl),
                     border: Border.all(
                       color: entry.key == value ? p.borderHover : p.border,
                     ),

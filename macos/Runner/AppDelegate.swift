@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import Security
 
 @main
 class AppDelegate: FlutterAppDelegate {
@@ -20,6 +21,11 @@ class AppDelegate: FlutterAppDelegate {
   /// path can be reached from more than one window over time — so a release is
   /// real only once no window still holds it.
   private var securityScoped: [String: URL] = [:]
+
+  /// Set by `relaunchAfterQuit`; consumed in `applicationWillTerminate` once
+  /// the normal quit sequence (including unsaved-work prompts) has actually
+  /// let termination proceed.
+  private var pendingRelaunchPath: String?
 
   // ─── Launch ──────────────────────────────────────────────────────────────
 
@@ -210,6 +216,51 @@ class AppDelegate: FlutterAppDelegate {
   override func applicationWillTerminate(_ notification: Notification) {
     for url in securityScoped.values { url.stopAccessingSecurityScopedResource() }
     securityScoped.removeAll()
+
+    // Fired via `Process`, not `NSWorkspace.openApplication`'s async
+    // completion handler: `open` forks and detaches immediately, so it
+    // survives this process exiting a moment later. The async API's
+    // completion could otherwise race the exit and never fire.
+    if let path = pendingRelaunchPath {
+      let task = Process()
+      task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+      task.arguments = ["-n", path]
+      try? task.run()
+    }
+  }
+
+  // ─── One-click update ────────────────────────────────────────────────────
+
+  /// Verifies an extracted bundle is genuinely signed by this app's own
+  /// Developer ID before anything is installed from it — the only real
+  /// security boundary in the update pipeline, since the download URL itself
+  /// is just taken from the GitHub API response.
+  func verifySignature(path: String?) -> Bool {
+    guard let path = path else { return false }
+    var staticCode: SecStaticCode?
+    let url = URL(fileURLWithPath: path)
+    guard SecStaticCodeCreateWithPath(url as CFURL, [], &staticCode) == errSecSuccess,
+          let code = staticCode else { return false }
+
+    var requirement: SecRequirement?
+    let requirementString =
+      "anchor apple generic and certificate leaf[subject.OU] = \"R9Q763J4DV\""
+        as CFString
+    guard SecRequirementCreateWithString(requirementString, [], &requirement) == errSecSuccess,
+          let req = requirement else { return false }
+
+    let flags = SecCSFlags(rawValue: kSecCSCheckAllArchitectures)
+    return SecStaticCodeCheckValidity(code, flags, req) == errSecSuccess
+  }
+
+  /// Queues a relaunch at `bundlePath` and runs the normal quit sequence to
+  /// get there — `applicationShouldTerminate` still prompts for unsaved work
+  /// in any open Editor window exactly as ⌘Q would, and the relaunch is
+  /// skipped entirely if the user cancels that prompt.
+  func relaunchAfterQuit(bundlePath: String?) {
+    guard let bundlePath = bundlePath else { return }
+    pendingRelaunchPath = bundlePath
+    NSApp.terminate(nil)
   }
 
   // ─── Atomic write ────────────────────────────────────────────────────────

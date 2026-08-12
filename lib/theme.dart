@@ -101,6 +101,14 @@ extension PaletteAccess on BuildContext {
 
 const Cubic kAppEase = Cubic(0.22, 1, 0.36, 1);
 
+/// The two corner-radius tiers every rounded element in the app draws from —
+/// controls (buttons, pills, chips, rows) and surfaces (cards, dialogs).
+/// Interactive elements must use [kRadiusControl] for their visible shape
+/// *and* for whatever draws their hover/press state, so the highlight never
+/// mismatches the shape it's highlighting.
+const double kRadiusControl = 8;
+const double kRadiusSurface = 14;
+
 ThemeData buildAppTheme(AppPalette p) {
   return ThemeData(
     brightness: p.brightness,

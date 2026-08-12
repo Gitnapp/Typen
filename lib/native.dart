@@ -189,4 +189,16 @@ class Native {
       return null;
     });
   }
+
+  /// Checks an extracted update bundle is genuinely signed by this app's own
+  /// Developer ID — done natively (`SecStaticCode`) since that API has no
+  /// Dart equivalent. The one real security boundary in the update pipeline.
+  static Future<bool> verifySignature(String path) async =>
+      await _call<bool>('verifySignature', {'path': path}) ?? false;
+
+  /// Quits the app (running the normal unsaved-work prompt sequence first)
+  /// and relaunches at [bundlePath] once that sequence actually lets
+  /// termination proceed. Never returns if the relaunch happens.
+  static Future<void> relaunchAfterQuit(String bundlePath) =>
+      _call<void>('relaunchAfterQuit', {'path': bundlePath}).then((_) {});
 }

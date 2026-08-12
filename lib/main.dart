@@ -1104,7 +1104,7 @@ class _Badge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: p.surface2,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(kRadiusControl),
         border: Border.all(color: warn ? p.coral : p.border),
       ),
       child: Text(
@@ -1173,7 +1173,7 @@ class _ModePill extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
             decoration: BoxDecoration(
               color: isPreview ? p.surface3 : p.surface2,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(kRadiusControl),
               border: Border.all(color: p.border),
             ),
             child: Text(

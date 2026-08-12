@@ -63,7 +63,8 @@ class _AppDialogShell<T> extends StatelessWidget {
     final p = context.palette;
     return Dialog(
       backgroundColor: p.surface1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusSurface)),
       elevation: 24,
       child: SizedBox(
         width: 380,
@@ -138,7 +139,8 @@ class _DialogButton<T> extends StatelessWidget {
   const _DialogButton({required this.action});
   final DialogAction<T> action;
 
-  static final _shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
+  static final _shape =
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusControl));
   static const _padding = EdgeInsets.symmetric(horizontal: 16, vertical: 10);
   static const _primaryText = TextStyle(fontSize: 13, fontWeight: FontWeight.w600);
   static const _plainText = TextStyle(fontSize: 13, fontWeight: FontWeight.w500);

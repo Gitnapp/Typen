@@ -9,6 +9,7 @@ void main() {
     name: 'Typen v9.9.9 — test release',
     htmlUrl: 'https://github.com/Gitnapp/Typen/releases/tag/v9.9.9',
     body: '这是一条测试用的发布说明。',
+    assets: [],
   );
 
   testWidgets('shows the release name, notes, and all three actions',
@@ -17,8 +18,7 @@ void main() {
       MaterialApp(
         home: Builder(
           builder: (context) => ElevatedButton(
-            onPressed: () =>
-                showUpdateDialog(context, release, onSkip: (_) {}),
+            onPressed: () => showUpdateDialog(context, release),
             child: const Text('open'),
           ),
         ),
@@ -33,21 +33,19 @@ void main() {
     expect(find.text(release.body), findsOneWidget);
     expect(find.text('跳过此版本'), findsOneWidget);
     expect(find.text('以后再说'), findsOneWidget);
-    expect(find.text('前往下载'), findsOneWidget);
+    expect(find.text('立即更新'), findsOneWidget);
   });
 
-  testWidgets('"跳过此版本" invokes onSkip with the release tag and closes',
+  testWidgets('"跳过此版本" resolves with UpdateDialogAction.skip and closes',
       (tester) async {
-    String? skipped;
+    UpdateDialogAction? action;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (context) => ElevatedButton(
-            onPressed: () => showUpdateDialog(
-              context,
-              release,
-              onSkip: (tag) => skipped = tag,
-            ),
+            onPressed: () async {
+              action = await showUpdateDialog(context, release);
+            },
             child: const Text('open'),
           ),
         ),
@@ -59,7 +57,7 @@ void main() {
     await tester.tap(find.text('跳过此版本'));
     await tester.pumpAndSettle();
 
-    expect(skipped, 'v9.9.9');
+    expect(action, UpdateDialogAction.skip);
     expect(find.text('发现新版本'), findsNothing);
   });
 

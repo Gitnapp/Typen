@@ -2,6 +2,19 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+/// A downloadable file attached to a GitHub release.
+class ReleaseAsset {
+  const ReleaseAsset({required this.name, required this.downloadUrl});
+
+  final String name;
+  final String downloadUrl;
+
+  factory ReleaseAsset.fromJson(Map<String, dynamic> json) => ReleaseAsset(
+        name: json['name'] as String,
+        downloadUrl: json['browser_download_url'] as String,
+      );
+}
+
 /// A GitHub release, trimmed to what the update dialog needs.
 class GitHubRelease {
   const GitHubRelease({
@@ -9,12 +22,23 @@ class GitHubRelease {
     required this.name,
     required this.htmlUrl,
     required this.body,
+    required this.assets,
   });
 
   final String tagName;
   final String name;
   final String htmlUrl;
   final String body;
+  final List<ReleaseAsset> assets;
+
+  /// The packaged app bundle for this release, if one was published — see
+  /// `scripts/package_release.sh`, which always names it `Typen-vX.Y.Z.zip`.
+  ReleaseAsset? get zipAsset {
+    for (final asset in assets) {
+      if (asset.name.toLowerCase().endsWith('.zip')) return asset;
+    }
+    return null;
+  }
 
   factory GitHubRelease.fromJson(Map<String, dynamic> json) => GitHubRelease(
         tagName: json['tag_name'] as String,
@@ -23,6 +47,10 @@ class GitHubRelease {
             : json['tag_name'] as String,
         htmlUrl: json['html_url'] as String,
         body: json['body'] as String? ?? '',
+        assets: ((json['assets'] as List<dynamic>?) ?? const [])
+            .cast<Map<String, dynamic>>()
+            .map(ReleaseAsset.fromJson)
+            .toList(),
       );
 }
 

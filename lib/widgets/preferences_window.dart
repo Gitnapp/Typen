@@ -7,6 +7,7 @@ import '../native.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../update_checker.dart';
+import '../updater.dart';
 import 'settings_controls.dart';
 import 'update_dialog.dart';
 
@@ -132,7 +133,7 @@ class _Sidebar extends StatelessWidget {
   }
 }
 
-class _SidebarItem extends StatelessWidget {
+class _SidebarItem extends StatefulWidget {
   const _SidebarItem({
     required this.icon,
     required this.label,
@@ -146,35 +147,53 @@ class _SidebarItem extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_SidebarItem> createState() => _SidebarItemState();
+}
+
+class _SidebarItemState extends State<_SidebarItem> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final Color background;
+    if (widget.selected) {
+      background = p.surface3;
+    } else if (_hovered) {
+      background = p.surface2;
+    } else {
+      background = Colors.transparent;
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1.5),
       child: MouseRegion(
-        cursor: SystemMouseCursors.click,
+        cursor: SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
-          onTap: onTap,
+          onTap: widget.onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
             decoration: BoxDecoration(
-              color: selected ? p.surface3 : Colors.transparent,
-              borderRadius: BorderRadius.circular(7),
+              color: background,
+              borderRadius: BorderRadius.circular(kRadiusControl),
             ),
             child: Row(
               children: [
                 Icon(
-                  icon,
+                  widget.icon,
                   size: 15,
-                  color: selected ? p.textPrimary : p.textSecondary,
+                  color: widget.selected ? p.textPrimary : p.textSecondary,
                 ),
                 const SizedBox(width: 9),
                 Text(
-                  label,
+                  widget.label,
                   style: TextStyle(
                     fontSize: 12.5,
-                    color: selected ? p.textPrimary : p.textSecondary,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    color: widget.selected ? p.textPrimary : p.textSecondary,
+                    fontWeight:
+                        widget.selected ? FontWeight.w600 : FontWeight.w400,
                   ),
                 ),
               ],
@@ -249,7 +268,7 @@ class _Section extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             color: p.surface0,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(kRadiusSurface),
             border: Border.all(color: p.border),
           ),
           child: Column(
@@ -390,6 +409,7 @@ class _AboutPage extends StatefulWidget {
 class _AboutPageState extends State<_AboutPage> {
   String _version = '';
   bool _checking = false;
+  UpdateProgress? _updateProgress;
 
   @override
   void initState() {
@@ -406,6 +426,11 @@ class _AboutPageState extends State<_AboutPage> {
     if (_checking) return;
     setState(() => _checking = true);
     try {
+      if (_version.isEmpty) {
+        final info = await PackageInfo.fromPlatform();
+        if (!mounted) return;
+        setState(() => _version = info.version);
+      }
       final release = await const UpdateChecker().fetchLatest();
       if (!mounted) return;
       if (release == null) {
@@ -418,13 +443,56 @@ class _AboutPageState extends State<_AboutPage> {
         await showUpToDateDialog(context, failed: false);
         return;
       }
-      await showUpdateDialog(
-        context,
-        release,
-        onSkip: (tag) => widget.settings.skippedUpdateTag = tag,
-      );
+      final action = await showUpdateDialog(context, release);
+      if (!mounted) return;
+      if (action == UpdateDialogAction.skip) {
+        widget.settings.skippedUpdateTag = release.tagName;
+      } else if (action == UpdateDialogAction.install) {
+        await _install(release);
+      }
     } finally {
       if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  /// Downloads, verifies, and installs in place, showing progress inline in
+  /// the card below rather than inside a dialog — the dialog is already
+  /// dismissed by the time this runs. Ends with the app quitting to relaunch
+  /// at the new copy; if it returns instead, the user cancelled the install
+  /// folder picker or the unsaved-work prompt during quit.
+  Future<void> _install(GitHubRelease release) async {
+    setState(
+      () => _updateProgress = const UpdateProgress(
+        UpdateStage.downloading,
+        fraction: 0,
+      ),
+    );
+    try {
+      await const Updater().run(
+        release,
+        onProgress: (progress) {
+          if (mounted) setState(() => _updateProgress = progress);
+        },
+      );
+    } on UpdateFailure catch (e) {
+      if (mounted) await showUpdateFailedDialog(context, e.message);
+    } finally {
+      if (mounted) setState(() => _updateProgress = null);
+    }
+  }
+
+  String _progressLabel(UpdateProgress progress) {
+    switch (progress.stage) {
+      case UpdateStage.downloading:
+        final fraction = progress.fraction;
+        final pct = fraction == null ? '' : ' ${(fraction * 100).round()}%';
+        return '下载中…$pct';
+      case UpdateStage.extracting:
+        return '解压中…';
+      case UpdateStage.verifying:
+        return '校验签名…';
+      case UpdateStage.installing:
+        return '安装中…';
     }
   }
 
@@ -447,7 +515,7 @@ class _AboutPageState extends State<_AboutPage> {
                     height: 40,
                     decoration: BoxDecoration(
                       color: p.surface2,
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(kRadiusControl),
                     ),
                     alignment: Alignment.center,
                     child: Text(
@@ -479,13 +547,19 @@ class _AboutPageState extends State<_AboutPage> {
                       ],
                     ),
                   ),
-                  TextButton(
-                    onPressed: _checking ? null : runCheck,
-                    child: Text(
-                      _checking ? '检查中…' : '检查更新…',
-                      style: TextStyle(color: p.gold, fontSize: 12),
+                  if (_updateProgress != null)
+                    Text(
+                      _progressLabel(_updateProgress!),
+                      style: TextStyle(color: p.textMuted, fontSize: 12),
+                    )
+                  else
+                    TextButton(
+                      onPressed: _checking ? null : runCheck,
+                      child: Text(
+                        _checking ? '检查中…' : '检查更新…',
+                        style: TextStyle(color: p.gold, fontSize: 12),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
