@@ -19,6 +19,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.gold,
     required this.coral,
     required this.emerald,
+    required this.accent,
+    required this.destructive,
     required this.selection,
     required this.findMatch,
     required this.findCurrent,
@@ -38,9 +40,18 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color border;
   final Color borderHover;
 
+  /// Warm branding — headings/emphasis/links in rendered Markdown, the
+  /// unsaved-dot, the brand mark. Never a clickable control's own colour;
+  /// see [accent] for that.
   final Color gold;
   final Color coral;
   final Color emerald;
+
+  /// macOS system blue/red — interactive controls only (buttons, sliders,
+  /// links, switches), so they read as native chrome rather than branded
+  /// document content. Kept apart from [gold]/[coral] on purpose.
+  final Color accent;
+  final Color destructive;
 
   final Color selection;
   final Color findMatch;
@@ -61,6 +72,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     gold: Color(0xFFD4A93A),
     coral: Color(0xFFF08A3E),
     emerald: Color(0xFF4A8A5C),
+    accent: Color(0xFF0A84FF),
+    destructive: Color(0xFFFF453A),
     selection: Color(0x47D4A93A),
     findMatch: Color(0x38D4A93A),
     findCurrent: Color(0x8CF08A3E),
@@ -81,6 +94,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     gold: Color(0xFF9A7712),
     coral: Color(0xFFC2621C),
     emerald: Color(0xFF2F6B41),
+    accent: Color(0xFF007AFF),
+    destructive: Color(0xFFFF3B30),
     selection: Color(0x479A7712),
     findMatch: Color(0x389A7712),
     findCurrent: Color(0x8CC2621C),
@@ -118,7 +133,7 @@ ThemeData buildAppTheme(AppPalette p) {
     canvasColor: p.surface0,
     dividerColor: p.border,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: p.gold,
+      seedColor: p.accent,
       brightness: p.brightness,
       surface: p.surface1,
     ),

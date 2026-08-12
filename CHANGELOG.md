@@ -1,5 +1,36 @@
 # CHANGELOG
 
+## [2026-08-12] v0.3.7 —— 按钮风格统一 + 预览定位加固
+
+修复 GitHub #8、部分缓解 #6，#7 排查清楚了根因但暂无法在应用层修复。
+
+### 按钮 hover 圆角统一（#8）
+
+`dialog_shell.dart` 的 destructive/plain 两个 `TextButton` 和偏好设置"检查更新…"按钮之前没传 `shape`，hover/press 高亮走 Material 3 默认的 `StadiumBorder`（全圆角胶囊），和设置左栏、分段控件统一用的 `kRadiusControl`（8px）不一致。全部补上 `shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusControl))`。
+
+### 交互控件配色改用 macOS 系统色（#8）
+
+`AppPalette` 新增 `accent`（systemBlue：dark `#0A84FF` / light `#007AFF`）、`destructive`（systemRed：dark `#FF453A` / light `#FF3B30`）两个 token，只给交互控件用——原来的 `gold`/`coral` 保留给 Markdown 语法高亮、品牌标记、编辑器光标/选区这些内容/品牌层面的暖色调，两者职责分开。
+
+改用 `accent` 的位置：`ColorScheme.fromSeed` 的 seedColor、对话框主按钮背景色、设置页滑块 track/thumb、"检查更新…"按钮文字、关于页 GitHub 链接。对话框 destructive 按钮改用 `destructive`。主按钮文字色顺带简化成固定白色——systemBlue 背景在深浅两种模式下都用白字是 macOS 原生按钮的实际做法，不再需要金色那种按亮度切黑/白的判断。
+
+### 预览定位加固，但没解决主症状（#6）
+
+`_toggleMode()` 切到预览时的"滚动比例"映射改成 `_settleFraction()`：跳一次之后追踪 `maxScrollExtent` 有没有随后续帧变化（比如本地图片解码完成后撑高了内容），变了就用同一个 fraction 在下一帧重新跳一次，最多追 4 帧。这修的是"图片让 maxScrollExtent 事后变化"这一个次要因素。
+
+排查后确认 issue 里怀疑的另一个因素（`TextField.scrollPadding` 让源码/预览两侧 `maxScrollExtent` 基准不一致）并不成立——查过 `EditableText` 源码，`scrollPadding` 只影响光标自动滚入视口时的计算，不参与 `maxScrollExtent`。
+
+**主症状没解决**：真正的根因——source 和 preview 两个视图对标题/代码块/列表的行高、间距渲染完全不同，同一个"滚动比例"在两边对应到不同的内容——需要把比例映射换成内容级映射（按源码字符 offset 定位预览里对应的 Markdown 块）。`markdown` 包（7.3.1）的 AST 不带 source span，没有现成信息做这个映射，只能自己写一层块识别+逐块测量，相当于换掉预览的渲染管线，回归风险和这个问题不成比例。这次没做，issue 保持打开。
+
+### 排查了但没能修（#7）
+
+预览选中高亮只覆盖字符高度、混排字体时一行内参差不齐——根因在 Flutter 引擎，`RenderParagraph._SelectableFragment.paint`（`rendering/paragraph.dart`）调用 `getBoxesForSelection` 时没传 `boxHeightStyle`，默认走 `tight`（按每个 run 自己的字体度量取框，而不是整行高度）。核实过 `dart:ui` 的 `BoxHeightStyle.strut`——"按段落 StrutStyle 计算、整段高度一致"——正是需要的效果，但这个 call site 没把参数暴露出来，应用层没有办法传进去。可选的路只剩等 upstream 加开关，或者自己写一层 `SelectionContainer` delegate 接管绘制——都不是这次能做的量级，issue 保持打开。
+
+### 验证
+
+- `flutter analyze` 0 issue，`flutter test` 73 个测试全过（复用了已有的滚动位置映射测试，`_settleFraction` 对无图片文档的行为和原来的一次性跳转等价，没有引入回归）
+- 本机屏幕仍处于锁定状态，颜色/圆角改动没能截图实机核对，靠 `flutter analyze`/`flutter test` 加读代码复核
+
 ## [2026-08-12] v0.3.6 —— 一键更新 + 圆角统一
 
 ### 一键更新

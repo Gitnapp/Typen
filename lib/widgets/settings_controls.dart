@@ -91,9 +91,9 @@ class SettingsSlider extends StatelessWidget {
           child: SliderTheme(
             data: SliderThemeData(
               trackHeight: 3,
-              activeTrackColor: p.gold,
+              activeTrackColor: p.accent,
               inactiveTrackColor: p.surface3,
-              thumbColor: p.gold,
+              thumbColor: p.accent,
               overlayShape: SliderComponentShape.noOverlay,
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
             ),

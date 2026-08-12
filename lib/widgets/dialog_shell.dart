@@ -154,12 +154,10 @@ class _DialogButton<T> extends StatelessWidget {
       DialogActionKind.primary => FilledButton(
           onPressed: onTap,
           style: FilledButton.styleFrom(
-            backgroundColor: p.gold,
-            // A single gold sits mid-contrast against both palettes' text
-            // colours — the readable pairing flips with the theme, not with
-            // gold's own (near-identical) luminance across the two.
-            foregroundColor:
-                p.brightness == Brightness.dark ? Colors.black : Colors.white,
+            backgroundColor: p.accent,
+            // macOS's own default-button chrome: white text on systemBlue
+            // in both appearances, no brightness-conditional flip needed.
+            foregroundColor: Colors.white,
             shape: _shape,
             padding: _padding,
             textStyle: _primaryText,
@@ -180,7 +178,8 @@ class _DialogButton<T> extends StatelessWidget {
       DialogActionKind.destructive => TextButton(
           onPressed: onTap,
           style: TextButton.styleFrom(
-            foregroundColor: p.coral,
+            foregroundColor: p.destructive,
+            shape: _shape,
             padding: _padding,
             textStyle: _plainText,
           ),
@@ -190,6 +189,7 @@ class _DialogButton<T> extends StatelessWidget {
           onPressed: onTap,
           style: TextButton.styleFrom(
             foregroundColor: p.textMuted,
+            shape: _shape,
             padding: _padding,
             textStyle: _plainText,
           ),

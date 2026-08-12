@@ -555,9 +555,15 @@ class _AboutPageState extends State<_AboutPage> {
                   else
                     TextButton(
                       onPressed: _checking ? null : runCheck,
+                      style: TextButton.styleFrom(
+                        foregroundColor: p.accent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(kRadiusControl),
+                        ),
+                      ),
                       child: Text(
                         _checking ? '检查中…' : '检查更新…',
-                        style: TextStyle(color: p.gold, fontSize: 12),
+                        style: const TextStyle(fontSize: 12),
                       ),
                     ),
                 ],
@@ -577,7 +583,7 @@ class _AboutPageState extends State<_AboutPage> {
                 ),
                 child: Text(
                   'Gitnapp/Typen',
-                  style: TextStyle(fontSize: 12.5, color: p.gold),
+                  style: TextStyle(fontSize: 12.5, color: p.accent),
                 ),
               ),
             ),

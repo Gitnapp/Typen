@@ -612,7 +612,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
       // until the next frame.
       _previewFocus.requestFocus();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _jumpToFraction(_previewScroll, fraction);
+        _settleFraction(_previewScroll, fraction);
       });
     } else {
       // EditableText keeps the caret on screen for as long as it holds
@@ -636,6 +636,28 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
   void _jumpToFraction(ScrollController controller, double fraction) {
     if (!controller.hasClients) return;
     controller.jumpTo(fraction * controller.position.maxScrollExtent);
+  }
+
+  /// Re-applies [_jumpToFraction] across a few more frames — local images in
+  /// the preview lay out at zero height until decoded, so `maxScrollExtent`
+  /// on the jump's first frame can still be short of its settled value.
+  /// Stops as soon as `maxScrollExtent` stops changing between frames.
+  void _settleFraction(
+    ScrollController controller,
+    double fraction, {
+    int passesLeft = 4,
+  }) {
+    if (!controller.hasClients) return;
+    final before = controller.position.maxScrollExtent;
+    _jumpToFraction(controller, fraction);
+    if (passesLeft <= 1) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!controller.hasClients ||
+          controller.position.maxScrollExtent == before) {
+        return;
+      }
+      _settleFraction(controller, fraction, passesLeft: passesLeft - 1);
+    });
   }
 
   void _dispatch(Intent intent) {
