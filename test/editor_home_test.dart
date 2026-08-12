@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:typen/main.dart';
@@ -249,7 +248,9 @@ void main() {
     await tester.tap(find.byTooltip('切换模式（⌘/）'));
     await flush(tester);
 
-    final previewScroll = tester.widget<Markdown>(find.byType(Markdown)).controller!;
+    final previewScroll = tester
+        .widget<SingleChildScrollView>(find.byType(SingleChildScrollView))
+        .controller!;
     expect(previewScroll.position.maxScrollExtent, greaterThan(0));
     final previewFraction =
         previewScroll.offset / previewScroll.position.maxScrollExtent;

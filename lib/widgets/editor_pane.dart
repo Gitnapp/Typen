@@ -180,22 +180,36 @@ class EditorPane extends StatelessWidget {
           controller: previewScrollController,
           child: ScrollConfiguration(
             behavior: const _NoScrollbarBehavior(),
-            // flutter_markdown_plus's own `selectable: true` gives every block
-            // (paragraph, heading, list item, ...) its own independent
-            // SelectableText, so a drag never crosses a block boundary.
-            // SelectionArea instead makes every Text.rich it wraps share one
-            // continuous selection — which needs `selectable: false` here so
-            // the package doesn't wrap things in its own SelectableText too.
+            // `Markdown` (the scrolling widget) lays its blocks out in a
+            // ListView, which is sliver-backed: Flutter only lays out items
+            // near the viewport and *estimates* maxScrollExtent from the
+            // average extent-so-far until every child has been measured. On
+            // content with uneven block heights (headings, code blocks,
+            // lists) that estimate visibly changes as you scroll — which is
+            // what made the Scrollbar's thumb resize while scrolling.
+            // MarkdownBody lays every block out in a plain Column instead —
+            // no lazy layout, no estimate, exact height once — wrapped in
+            // our own SingleChildScrollView for a maxScrollExtent that's
+            // constant from the first frame.
+            //
+            // flutter_markdown_plus's own `selectable: true` gives every
+            // block its own independent SelectableText, so a drag never
+            // crosses a block boundary. SelectionArea instead makes every
+            // Text.rich it wraps share one continuous selection — which
+            // needs `selectable: false` here so the package doesn't wrap
+            // things in its own SelectableText too.
             child: SelectionArea(
-              child: Markdown(
+              child: SingleChildScrollView(
                 controller: previewScrollController,
-                data: stripFrontMatter(controller.text),
-                selectable: false,
                 padding: EdgeInsets.fromLTRB(side, 24, side, 60),
-                extensionSet: md.ExtensionSet.gitHubWeb,
-                styleSheet: _styleSheet(palette),
-                imageBuilder: _buildImage,
-                onTapLink: (text, href, title) => _openLink(href),
+                child: MarkdownBody(
+                  data: stripFrontMatter(controller.text),
+                  selectable: false,
+                  extensionSet: md.ExtensionSet.gitHubWeb,
+                  styleSheet: _styleSheet(palette),
+                  imageBuilder: _buildImage,
+                  onTapLink: (text, href, title) => _openLink(href),
+                ),
               ),
             ),
           ),
