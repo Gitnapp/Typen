@@ -1,6 +1,7 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
 import 'document_file.dart';
@@ -8,10 +9,12 @@ import 'find.dart';
 import 'native.dart';
 import 'store.dart';
 import 'theme.dart';
+import 'update_checker.dart';
 import 'widgets/editor_pane.dart';
 import 'widgets/find_bar.dart';
 import 'widgets/markdown_highlighter.dart';
 import 'widgets/settings_sheet.dart';
+import 'widgets/update_dialog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -114,6 +117,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
       },
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdates());
   }
 
   @override
@@ -423,6 +427,53 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     }
   }
 
+  // ─── Update check ───────────────────────────────────────────────────────
+  // Every open Window runs its own engine and its own copy of this state, so
+  // an automatic check on launch is throttled through Settings — otherwise
+  // opening several Windows at once would fire one GitHub request each.
+  static const _autoCheckInterval = Duration(hours: 20);
+
+  Future<void> _checkForUpdates({bool manual = false}) async {
+    final settings = widget.stores.settings;
+    if (!manual) {
+      final last = settings.lastUpdateCheckAt;
+      if (last != null && DateTime.now().difference(last) < _autoCheckInterval) {
+        return;
+      }
+    }
+    if (_modalOpen) return;
+
+    settings.lastUpdateCheckAt = DateTime.now();
+    final release = await const UpdateChecker().fetchLatest();
+    if (!mounted) return;
+
+    if (release == null) {
+      if (manual) await showUpToDateDialog(context, failed: true);
+      return;
+    }
+
+    final currentVersion = (await PackageInfo.fromPlatform()).version;
+    if (!mounted) return;
+    final isNewer = isNewerVersion(release.tagName, currentVersion);
+    if (!isNewer) {
+      if (manual) await showUpToDateDialog(context, failed: false);
+      return;
+    }
+    if (!manual && release.tagName == settings.skippedUpdateTag) return;
+    if (!mounted || _modalOpen) return;
+
+    _modalOpen = true;
+    try {
+      await showUpdateDialog(
+        context,
+        release,
+        onSkip: (tag) => settings.skippedUpdateTag = tag,
+      );
+    } finally {
+      _modalOpen = false;
+    }
+  }
+
   Future<void> _reload(String path) async {
     try {
       final doc = await DocumentFile.read(path);
@@ -709,6 +760,14 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
       menus: [
         const PlatformProvidedMenuItem(
           type: PlatformProvidedMenuItemType.about,
+        ),
+        PlatformMenuItemGroup(
+          members: [
+            PlatformMenuItem(
+              label: '检查更新…',
+              onSelected: () => _checkForUpdates(manual: true),
+            ),
+          ],
         ),
         PlatformMenuItemGroup(
           members: [

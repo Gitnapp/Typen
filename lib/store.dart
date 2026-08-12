@@ -183,6 +183,23 @@ class Settings extends ChangeNotifier {
     _prefs.setBool('proportional_editor_font', v);
     notifyListeners();
   }
+
+  /// When the app last checked GitHub for a new release. Throttles the
+  /// automatic on-launch check — each open Window would otherwise fire its
+  /// own request. Manual "检查更新…" always bypasses this.
+  DateTime? get lastUpdateCheckAt {
+    final ms = _prefs.getInt('last_update_check_at');
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  set lastUpdateCheckAt(DateTime v) =>
+      _prefs.setInt('last_update_check_at', v.millisecondsSinceEpoch);
+
+  /// A release tag the user dismissed with "跳过此版本" — the automatic
+  /// check won't prompt for it again. Manual checks always show it.
+  String? get skippedUpdateTag => _prefs.getString('skipped_update_tag');
+
+  set skippedUpdateTag(String v) => _prefs.setString('skipped_update_tag', v);
 }
 
 class Stores {
