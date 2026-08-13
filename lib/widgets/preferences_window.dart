@@ -164,12 +164,17 @@ class _SidebarItemState extends State<_SidebarItem> {
     } else {
       background = Colors.transparent;
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1.5),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.basic,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+    // MouseRegion has to be the outermost widget, not wrapped inside this
+    // padding — otherwise the 1.5px gap between adjacent items is a dead
+    // zone neither item's MouseRegion covers, and ordinary mouse jitter
+    // crossing it (adjacent rows are only ~3px apart) reads as the hover
+    // colour flickering on and off instead of just... hovering.
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 1.5),
         child: GestureDetector(
           onTap: widget.onTap,
           child: AnimatedContainer(
@@ -547,15 +552,24 @@ class _AboutPageState extends State<_AboutPage> {
                       ],
                     ),
                   ),
-                  // No manual "检查更新…" button here — the menu item
-                  // ("Typen" 菜单 → 检查更新…) is the one trigger, and this
-                  // page still jumps to and shows its result either way (see
-                  // PreferencesHome._runUpdateCheck). Progress from that
-                  // still needs to be visible here while it's running.
                   if (_updateProgress != null)
                     Text(
                       _progressLabel(_updateProgress!),
                       style: TextStyle(color: p.textMuted, fontSize: 12),
+                    )
+                  else
+                    TextButton(
+                      onPressed: _checking ? null : runCheck,
+                      style: TextButton.styleFrom(
+                        foregroundColor: p.textPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(kRadiusControl),
+                        ),
+                      ),
+                      child: Text(
+                        _checking ? '检查中…' : '检查更新…',
+                        style: const TextStyle(fontSize: 12),
+                      ),
                     ),
                 ],
               ),
