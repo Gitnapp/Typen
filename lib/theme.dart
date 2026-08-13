@@ -135,6 +135,10 @@ ThemeData buildAppTheme(AppPalette p) {
   ButtonStyle noRipple(WidgetStateProperty<Color?> overlay) => ButtonStyle(
         splashFactory: NoSplash.splashFactory,
         overlayColor: overlay,
+        // A flat colour swap, not a fade — the default cross-fade between
+        // hover states is what read as flicker/blinking near a rounded
+        // corner's hit-test edge.
+        animationDuration: Duration.zero,
       );
   final surfaceOverlay = WidgetStateProperty.resolveWith<Color?>((states) {
     if (states.contains(WidgetState.pressed)) return p.surface3;

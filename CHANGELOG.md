@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [2026-08-13] v0.3.10 —— 按钮 hover 去掉闪烁
+
+v0.3.9 里给按钮加的 hover 效果会闪烁——Flutter 按钮默认在状态切换时有一段渐变动画，跟鼠标在圆角边界的进入/离开判定有冲突，读起来像来回闪。`buildAppTheme` 里给按钮主题加了 `animationDuration: Duration.zero`，hover 颜色变成瞬时切换，没有过渡动画可闪。
+
+### 验证
+
+- `flutter analyze` 0 issue，`flutter test` 74 个测试全过
+- 本机多屏环境下鼠标坐标工具持续不稳定，这次没能拿到可靠的实机截图验证 hover 效果本身；改动是 `ButtonStyle.animationDuration` 的直接、文档化用法，语义上能消除过渡动画
+
 ## [2026-08-13] v0.3.9 —— 界面细节清理
 
 ### 去掉"关于"页的"检查更新…"按钮
