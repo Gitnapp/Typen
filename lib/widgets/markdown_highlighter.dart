@@ -90,6 +90,28 @@ class MarkdownHighlightingController extends TextEditingController {
   static final _task = RegExp(r'^\[([ xX])\]\s');
   static final _indentCode = RegExp(r'^(?: {4}|\t)');
 
+  /// Font-size multiplier for an ATX heading, by level — shared between
+  /// syntax highlighting and cursor sizing so the caret is never a
+  /// different size than the text it's sitting next to.
+  static double _headingScale(int level) => switch (level) {
+        1 => 1.6,
+        2 => 1.35,
+        3 => 1.18,
+        _ => 1.06,
+      };
+
+  /// The heading-scale multiplier for the line containing [offset] — 1.0 on
+  /// any non-heading line.
+  double headingScaleAt(int offset) {
+    final clamped = offset.clamp(0, text.length);
+    final lineStart =
+        clamped == 0 ? 0 : text.lastIndexOf('\n', clamped - 1) + 1;
+    var lineEnd = text.indexOf('\n', clamped);
+    if (lineEnd == -1) lineEnd = text.length;
+    final heading = _heading.firstMatch(text.substring(lineStart, lineEnd));
+    return heading == null ? 1.0 : _headingScale(heading.group(1)!.length);
+  }
+
   static final _inline = RegExp(
     r'(?<code>`+[^`\n]+`+)'
     r'|(?<img>!\[[^\]\n]*\]\([^)\n]*\))'
@@ -234,12 +256,7 @@ class MarkdownHighlightingController extends TextEditingController {
     final heading = _heading.firstMatch(line);
     if (heading != null) {
       final level = heading.group(1)!.length;
-      final scale = switch (level) {
-        1 => 1.6,
-        2 => 1.35,
-        3 => 1.18,
-        _ => 1.06,
-      };
+      final scale = _headingScale(level);
       bodyStyle = base.copyWith(
         fontSize: _config.fontSize * scale,
         fontWeight: level <= 2 ? FontWeight.w700 : FontWeight.w600,

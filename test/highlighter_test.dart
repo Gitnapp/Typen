@@ -138,4 +138,15 @@ void main() {
     final body = children.firstWhere((c) => c.text!.contains('normal'));
     expect(heading.style!.fontSize, greaterThan(body.style!.fontSize!));
   });
+
+  test('headingScaleAt matches the caret to whatever line it is on', () {
+    final controller = make('# H1\n\n## H2\n\nnormal text\n');
+    // Offsets landing inside each line, including right at a boundary.
+    expect(controller.headingScaleAt(0), 1.6); // start of "# H1"
+    expect(controller.headingScaleAt(2), 1.6); // inside "# H1"
+    expect(controller.headingScaleAt(8), 1.35); // inside "## H2"
+    expect(controller.headingScaleAt(16), 1.0); // inside "normal text"
+    expect(controller.headingScaleAt(-1), 1.6); // clamped to line 0
+    expect(controller.headingScaleAt(999), 1.0); // clamped to last line
+  });
 }

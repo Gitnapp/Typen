@@ -99,46 +99,56 @@ class EditorPane extends StatelessWidget {
         // and exposes no way to turn it off — but it asks the ambient
         // behaviour to build it, so a behaviour that builds nothing wins.
         behavior: const _NoScrollbarBehavior(),
-        child: TextField(
-          controller: controller,
-          undoController: undoController,
-          focusNode: focusNode,
-          scrollController: scrollController,
-          // Ambient physics on macOS is BouncingScrollPhysics, which lets
-          // `pixels` legitimately sit outside [min, max] for a few frames
-          // during rubber-band/spring-back at the document's ends. Scrollbar
-          // recomputes its thumb's length every frame with no smoothing, and
-          // its overscroll branch shrinks/grows the thumb on each of those
-          // frames — that reads as the thumb flickering. Clamping physics
-          // keeps `pixels` inside [min, max] at all times, so the thumb stays
-          // a stable function of viewportDimension/maxScrollExtent.
-          scrollPhysics: const ClampingScrollPhysics(),
-          scrollPadding: const EdgeInsets.symmetric(vertical: 80),
-          maxLines: null,
-          expands: true,
-          autofocus: true,
-          cursorColor: palette.gold,
-          cursorWidth: 2,
-          // Flutter sizes the caret to the *paragraph* line height by default,
-          // not the glyph — with height: 1.6 below that reads as comically
-          // tall. Pin it to the font's own metrics instead.
-          cursorHeight: settings.fontSize * 1.2,
-          // The controller supplies every span's style; this only sets the
-          // metrics the field uses for an empty buffer and the caret.
-          style: TextStyle(
-            color: palette.textPrimary,
-            fontFamily: settings.proportionalEditorFont ? null : monoFamily,
-            fontSize: settings.fontSize,
-            height: 1.6,
-            leadingDistribution: TextLeadingDistribution.even,
-          ),
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            // Flush against the title bar reads as clipped, not minimal —
-            // a small top gap only, bottom stays flush per the scrollbar fix.
-            contentPadding: EdgeInsets.fromLTRB(side, 24, side, 0),
-            hintText: '# 写点什么…',
-            hintStyle: TextStyle(color: palette.textMuted),
+        // Rebuilds just the field when the selection moves, so the caret
+        // picks up `headingScaleAt` the moment it lands on a different line
+        // — a plain build-time read would only refresh on unrelated rebuilds.
+        child: ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) => TextField(
+            controller: controller,
+            undoController: undoController,
+            focusNode: focusNode,
+            scrollController: scrollController,
+            // Ambient physics on macOS is BouncingScrollPhysics, which lets
+            // `pixels` legitimately sit outside [min, max] for a few frames
+            // during rubber-band/spring-back at the document's ends. Scrollbar
+            // recomputes its thumb's length every frame with no smoothing, and
+            // its overscroll branch shrinks/grows the thumb on each of those
+            // frames — that reads as the thumb flickering. Clamping physics
+            // keeps `pixels` inside [min, max] at all times, so the thumb stays
+            // a stable function of viewportDimension/maxScrollExtent.
+            scrollPhysics: const ClampingScrollPhysics(),
+            scrollPadding: const EdgeInsets.symmetric(vertical: 80),
+            maxLines: null,
+            expands: true,
+            autofocus: true,
+            cursorColor: palette.gold,
+            cursorWidth: 2,
+            // Flutter sizes the caret to the *paragraph* line height by
+            // default, not the glyph — with height: 1.6 below that reads as
+            // comically tall. Pin it to the font's own metrics instead, scaled
+            // up on a heading line so the caret is never shorter than the
+            // (enlarged) text it's sitting next to.
+            cursorHeight: settings.fontSize *
+                controller.headingScaleAt(controller.selection.baseOffset) *
+                1.2,
+            // The controller supplies every span's style; this only sets the
+            // metrics the field uses for an empty buffer and the caret.
+            style: TextStyle(
+              color: palette.textPrimary,
+              fontFamily: settings.proportionalEditorFont ? null : monoFamily,
+              fontSize: settings.fontSize,
+              height: 1.6,
+              leadingDistribution: TextLeadingDistribution.even,
+            ),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              // Flush against the title bar reads as clipped, not minimal —
+              // a small top gap only, bottom stays flush per the scrollbar fix.
+              contentPadding: EdgeInsets.fromLTRB(side, 24, side, 0),
+              hintText: '# 写点什么…',
+              hintStyle: TextStyle(color: palette.textMuted),
+            ),
           ),
         ),
       ),
