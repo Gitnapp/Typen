@@ -82,19 +82,27 @@ class AppDelegate: FlutterAppDelegate {
 
   /// Always a brand-new window with a blank Untitled Document. `pendingPaths`
   /// seeds the queue its Dart side drains on boot.
-  @discardableResult
-  func newWindow(pendingPaths: [String] = []) -> EditorWindow {
-    let window = EditorWindow(
-      id: nextWindowID,
-      app: self,
-      pendingPaths: pendingPaths,
-      cascadingFrom: windows.last
-    )
-    nextWindowID += 1
-    windows.append(window)
-    window.makeKeyAndOrderFront(nil)
-    windowsChanged()
-    return window
+  ///
+  /// Booting a Flutter engine — what `EditorWindow.init` does before the
+  /// window even exists — is synchronous and runs on the main thread; with
+  /// several engines already resident it can take long enough to read as the
+  /// whole app hanging, not just the new window being slow to open. Deferring
+  /// to the next run-loop turn doesn't make that work any faster, but it does
+  /// let the event that triggered this (⌘N, a menu click) finish being
+  /// handled first, rather than that event's own dispatch being what blocks.
+  func newWindow(pendingPaths: [String] = []) {
+    DispatchQueue.main.async {
+      let window = EditorWindow(
+        id: self.nextWindowID,
+        app: self,
+        pendingPaths: pendingPaths,
+        cascadingFrom: self.windows.last
+      )
+      self.nextWindowID += 1
+      self.windows.append(window)
+      window.makeKeyAndOrderFront(nil)
+      self.windowsChanged()
+    }
   }
 
   /// The single entry point for "the user picked a file to open" — ⌘O,
