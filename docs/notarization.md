@@ -15,11 +15,12 @@ Developer ID identity (Hardened Runtime + `macos/Runner/Release.entitlements`),
 submits it to Apple's notary service and waits for a verdict, then staples
 the notarization ticket to the app. Output: `build/macos/Build/Products/Release/Typen.app`.
 
-The script depends on two things already present in this machine's keychain
-(see setup below):
+The script depends on two things already present on this machine (see setup
+below):
 
-- a `Developer ID Application` signing identity
-- notarytool credentials stored under the keychain profile `typen-notary`
+- a `Developer ID Application` signing identity, in the login keychain
+- an App Store Connect API key (`.p8` file) at the path `notarize.sh` points
+  `API_KEY_PATH` to
 
 ## One-time machine setup
 
@@ -46,18 +47,22 @@ and credentials live in the local keychain, not in the repo).
    - Delete the `.key`/`.csr`/`.cer` files afterward — the identity now lives
      in the keychain.
 
-2. **notarytool credentials**
-   - Generate an App-Specific Password at [appleid.apple.com](https://account.apple.com/account/manage)
-     → Sign-In and Security → App-Specific Passwords.
-   - Store it under the profile name `notarize.sh` expects:
-     ```bash
-     xcrun notarytool store-credentials "typen-notary" \
-       --apple-id "your-apple-id@example.com" \
-       --team-id "YOUR_TEAM_ID" \
-       --password "xxxx-xxxx-xxxx-xxxx"
-     ```
-   - This validates the credentials against Apple and stores them in the
-     keychain; you won't be prompted for the password again.
+2. **notarytool credentials (App Store Connect API key)**
+   - [appleid.apple.com](https://appstoreconnect.apple.com/access/api) →
+     Keys → **+** → role *Developer* (notarization only needs that, not
+     Admin) → generate.
+   - Apple only lets you download the `.p8` once, at creation time. Save it
+     to `~/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8` — that's the
+     path `notarize.sh` expects (`API_KEY_PATH`), and the conventional
+     location `notarytool` itself searches by default.
+   - Update `API_KEY_ID` and `API_KEY_ISSUER` in `scripts/notarize.sh` to
+     match the key you generated (the issuer ID is shown on the same Keys
+     page, one per account — not per key).
+   - Preferred over the older Apple-ID + app-specific-password +
+     `--keychain-profile` method: an app-specific password can get silently
+     invalidated (a password change, a security review) and there's no
+     signal until the next release breaks — this key doesn't expire that
+     way, and doesn't depend on keychain state at all.
 
 If the identity name in `scripts/notarize.sh` (`IDENTITY=`) doesn't match
 what `security find-identity -v -p codesigning` shows on a new machine,
