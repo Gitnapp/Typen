@@ -547,24 +547,15 @@ class _AboutPageState extends State<_AboutPage> {
                       ],
                     ),
                   ),
+                  // No manual "检查更新…" button here — the menu item
+                  // ("Typen" 菜单 → 检查更新…) is the one trigger, and this
+                  // page still jumps to and shows its result either way (see
+                  // PreferencesHome._runUpdateCheck). Progress from that
+                  // still needs to be visible here while it's running.
                   if (_updateProgress != null)
                     Text(
                       _progressLabel(_updateProgress!),
                       style: TextStyle(color: p.textMuted, fontSize: 12),
-                    )
-                  else
-                    TextButton(
-                      onPressed: _checking ? null : runCheck,
-                      style: TextButton.styleFrom(
-                        foregroundColor: p.accent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(kRadiusControl),
-                        ),
-                      ),
-                      child: Text(
-                        _checking ? '检查中…' : '检查更新…',
-                        style: const TextStyle(fontSize: 12),
-                      ),
                     ),
                 ],
               ),
@@ -583,7 +574,7 @@ class _AboutPageState extends State<_AboutPage> {
                 ),
                 child: Text(
                   'Gitnapp/Typen',
-                  style: TextStyle(fontSize: 12.5, color: p.accent),
+                  style: TextStyle(fontSize: 12.5, color: p.textPrimary),
                 ),
               ),
             ),

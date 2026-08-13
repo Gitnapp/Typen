@@ -125,6 +125,28 @@ const double kRadiusControl = 8;
 const double kRadiusSurface = 14;
 
 ThemeData buildAppTheme(AppPalette p) {
+  // No ripple anywhere — a static hover/press fill instead, same idea as
+  // _SidebarItem's own hand-rolled hover. Text/outlined buttons have no
+  // background of their own, so an opaque surface tint reads as "a pill
+  // appears on hover". A filled button already has a colour of its own
+  // (kRadiusControl's accent blue) — painting the same opaque surface tint
+  // over it would just replace that colour with grey, so it gets a
+  // translucent wash instead, letting the base colour show through.
+  ButtonStyle noRipple(WidgetStateProperty<Color?> overlay) => ButtonStyle(
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: overlay,
+      );
+  final surfaceOverlay = WidgetStateProperty.resolveWith<Color?>((states) {
+    if (states.contains(WidgetState.pressed)) return p.surface3;
+    if (states.contains(WidgetState.hovered)) return p.surface2;
+    return null;
+  });
+  final washOverlay = WidgetStateProperty.resolveWith<Color?>((states) {
+    if (states.contains(WidgetState.pressed)) return Colors.white24;
+    if (states.contains(WidgetState.hovered)) return Colors.white12;
+    return null;
+  });
+
   return ThemeData(
     brightness: p.brightness,
     useMaterial3: true,
@@ -137,6 +159,10 @@ ThemeData buildAppTheme(AppPalette p) {
       brightness: p.brightness,
       surface: p.surface1,
     ),
+    textButtonTheme: TextButtonThemeData(style: noRipple(surfaceOverlay)),
+    outlinedButtonTheme:
+        OutlinedButtonThemeData(style: noRipple(surfaceOverlay)),
+    filledButtonTheme: FilledButtonThemeData(style: noRipple(washOverlay)),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: p.gold,
       selectionColor: p.selection,

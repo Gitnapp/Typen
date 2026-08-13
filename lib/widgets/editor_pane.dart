@@ -146,8 +146,6 @@ class EditorPane extends StatelessWidget {
               // Flush against the title bar reads as clipped, not minimal —
               // a small top gap only, bottom stays flush per the scrollbar fix.
               contentPadding: EdgeInsets.fromLTRB(side, 24, side, 0),
-              hintText: '# 写点什么…',
-              hintStyle: TextStyle(color: palette.textMuted),
             ),
           ),
         ),
