@@ -331,4 +331,30 @@ class AppDelegate: FlutterAppDelegate {
     if windows.contains(where: { $0 !== window && $0.holds(path) }) { return }
     securityScoped.removeValue(forKey: path)?.stopAccessingSecurityScopedResource()
   }
+
+  // ─── Startup background colour ──────────────────────────────────────────
+
+  /// Typen's own `surface0` — the exact hex values `AppPalette.light`/`.dark`
+  /// use in `theme.dart` — resolved the same way Dart resolves them: an
+  /// explicit light/dark override from Settings if the user set one,
+  /// current system appearance otherwise. `NSColor.windowBackgroundColor`
+  /// (a generic system colour) isn't a close enough match in either mode —
+  /// dark mode's system grey is nothing like Typen's near-black, and if the
+  /// user has forced a theme that disagrees with the system appearance, a
+  /// system-adaptive colour is wrong in exactly the case it exists to avoid.
+  /// Every new-window class needs to set both `backgroundColor` (native) and
+  /// `controller.backgroundColor` to this before showing itself, or it gets
+  /// a startup flash back — see the ADR.
+  static func startingBackgroundColor() -> NSColor {
+    let isDark: Bool
+    switch UserDefaults.standard.string(forKey: "flutter.theme_mode") {
+    case "light": isDark = false
+    case "dark": isDark = true
+    default:
+      isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    }
+    return isDark
+      ? NSColor(red: 0x0A / 255, green: 0x0A / 255, blue: 0x0A / 255, alpha: 1)
+      : NSColor(red: 0xFC / 255, green: 0xFC / 255, blue: 0xFB / 255, alpha: 1)
+  }
 }

@@ -77,6 +77,17 @@ final class EditorWindow: NSWindow, NSWindowDelegate {
     titlebarAppearsTransparent = true
     titleVisibility = .hidden
 
+    // FlutterView's background defaults to black until Dart's first frame
+    // paints (documented on FlutterViewController.backgroundColor), and this
+    // window is shown before that happens — without this, opening any window
+    // is a black flash that resolves once Flutter catches up, worse the
+    // slower that is (debug builds, a loaded machine). See
+    // AppDelegate.startingBackgroundColor — a generic system colour isn't
+    // enough here, it has to be Typen's own palette.
+    let startColor = AppDelegate.startingBackgroundColor()
+    backgroundColor = startColor
+    controller.backgroundColor = startColor
+
     contentViewController = controller
     // Adopting a view controller resizes the window down to that view, which
     // has no size of its own yet — so the intended size is set afterwards.

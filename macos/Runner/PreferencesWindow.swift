@@ -61,6 +61,12 @@ final class PreferencesWindow: NSWindow, NSWindowDelegate {
     title = "偏好设置"
     minSize = NSSize(width: 640, height: 420)
 
+    // See the matching comment in EditorWindow.init — FlutterView defaults
+    // to a black background until the first Dart frame paints, otherwise.
+    let startColor = AppDelegate.startingBackgroundColor()
+    backgroundColor = startColor
+    controller.backgroundColor = startColor
+
     contentViewController = controller
     setContentSize(Self.defaultContentSize)
     delegate = self
