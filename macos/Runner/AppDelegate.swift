@@ -35,6 +35,7 @@ class AppDelegate: FlutterAppDelegate {
   /// first: a launch that opened a file must not also get a blank window.
   override func applicationWillFinishLaunching(_ notification: Notification) {
     super.applicationWillFinishLaunching(notification)
+    observeReactivation()
     DispatchQueue.main.async {
       if self.windows.isEmpty { self.newWindow() }
     }
@@ -76,6 +77,31 @@ class AppDelegate: FlutterAppDelegate {
 
     let rest = urls.filter { !$0.isFileURL }
     if !rest.isEmpty { super.application(application, open: rest) }
+  }
+
+  /// `applicationDidBecomeActive` never actually reaches this delegate (the
+  /// override runs zero times — verified with logging), so the engines only
+  /// ever hear the *leaving* half of the app-lifecycle pair and stay in
+  /// `AppLifecycleState.hidden` forever. Key and mouse events still arrive in
+  /// Dart, but the framework's focus system ignores them while it believes
+  /// the app is hidden — that is the "window goes dead after switching apps"
+  /// bug. Observing the notifications directly is the reliable path, and the
+  /// state is pushed per engine because each window runs its own.
+  private func observeReactivation() {
+    let center = NotificationCenter.default
+    for name in [
+      NSApplication.didBecomeActiveNotification,
+      NSApplication.didUnhideNotification,
+    ] {
+      center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+        self?.broadcastLifecycle("AppLifecycleState.resumed")
+      }
+    }
+  }
+
+  private func broadcastLifecycle(_ state: String) {
+    for window in windows { window.notifyLifecycle(state) }
+    preferencesWindow?.notifyLifecycle(state)
   }
 
   // ─── Windows ─────────────────────────────────────────────────────────────

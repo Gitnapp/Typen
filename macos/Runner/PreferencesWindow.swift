@@ -115,6 +115,28 @@ final class PreferencesWindow: NSWindow, NSWindowDelegate {
     }
   }
 
+  /// Pushes an app-lifecycle state straight into this window's engine.
+  ///
+  /// Switching away from Typen delivers the leaving half of the pair
+  /// (`AppLifecycleState.hidden`) on its own, but nothing ever delivers the
+  /// returning half: `applicationDidBecomeActive` does not reach this app's
+  /// delegate at all (verified — the override runs zero times), so every
+  /// engine stays parked in `hidden`. Key and pointer events keep arriving
+  /// in Dart, but the framework's focus system ignores them while it thinks
+  /// the app is hidden, which is exactly what "the window goes dead after I
+  /// switch apps and come back" looks like.
+  ///
+  /// `becomeKey` is the signal that *does* reliably fire on the way back, so
+  /// that is what drives this; `AppDelegate` also watches the app-level
+  /// notifications as a backstop for a return that makes no window key.
+  func notifyLifecycle(_ state: String) {
+    FlutterBasicMessageChannel(
+      name: "flutter/lifecycle",
+      binaryMessenger: controller.engine.binaryMessenger,
+      codec: FlutterStringCodec.sharedInstance()
+    ).sendMessage(state)
+  }
+
   /// Tells an already-running Preferences engine to jump to 关于 and run a
   /// check. If Dart hasn't consumed the pending flag yet (a request arrived
   /// while this Window was still booting), queue it instead of racing the
@@ -136,6 +158,12 @@ final class PreferencesWindow: NSWindow, NSWindowDelegate {
       return true
     }
     return super.performKeyEquivalent(with: event)
+  }
+
+  /// The reliable "we're back" signal — see `notifyLifecycle`.
+  override func becomeKey() {
+    super.becomeKey()
+    notifyLifecycle("AppLifecycleState.resumed")
   }
 
   func windowWillClose(_ notification: Notification) {
