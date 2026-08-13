@@ -12,6 +12,28 @@ void main() {
     return Stores.open();
   }
 
+  /// The row's own background box. `.first` because `_Sidebar` is itself a
+  /// decorated box further up the tree — the innermost one is the row.
+  ///
+  /// Deliberately the painted `DecoratedBox`, not the `Container` widget: a
+  /// Container's `decoration` field is the *target* value, so reading it
+  /// would report the final colour even mid-cross-fade and quietly pass the
+  /// "one frame" test below no matter how long an animation ran.
+  Finder rowFor(String label) => find
+      .ancestor(of: find.text(label), matching: find.byType(DecoratedBox))
+      .first;
+
+  Color backgroundOf(WidgetTester tester, Finder row) =>
+      (tester.widget<DecoratedBox>(row).decoration as BoxDecoration).color!;
+
+  Future<TestGesture> mouse(WidgetTester tester) async {
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await tester.pump();
+    return gesture;
+  }
+
   testWidgets(
     'hovering an unselected sidebar item shades its background and keeps '
     'the basic (not click) cursor',
@@ -21,41 +43,50 @@ void main() {
       await tester.pumpAndSettle();
 
       // "外观" is selected by default; "关于" is not — hover that one.
-      final aboutRow = find.ancestor(
-        of: find.text('关于'),
-        matching: find.byType(AnimatedContainer),
-      );
-      expect(aboutRow, findsOneWidget);
+      final aboutRow = rowFor('关于');
+      final p = tester.element(find.text('关于')).palette;
+      expect(backgroundOf(tester, aboutRow), Colors.transparent);
 
-      Color backgroundOf() =>
-          (tester.widget<AnimatedContainer>(aboutRow).decoration
-                  as BoxDecoration)
-              .color!;
-
-      final context = tester.element(find.text('关于'));
-      final p = context.palette;
-      expect(backgroundOf(), Colors.transparent);
-
-      final gesture = await tester.createGesture(
-        kind: PointerDeviceKind.mouse,
-      );
-      await gesture.addPointer(location: Offset.zero);
-      addTearDown(gesture.removePointer);
-      await tester.pump();
-
+      final gesture = await mouse(tester);
       await gesture.moveTo(tester.getCenter(aboutRow));
       await tester.pumpAndSettle();
 
-      expect(backgroundOf(), p.surface2);
+      expect(backgroundOf(tester, aboutRow), p.surface2);
 
       final region = tester.widget<MouseRegion>(
         find.ancestor(of: aboutRow, matching: find.byType(MouseRegion)).first,
       );
       expect(region.cursor, SystemMouseCursors.basic);
 
-      await gesture.moveTo(const Offset(0, 0));
+      await gesture.moveTo(Offset.zero);
       await tester.pumpAndSettle();
-      expect(backgroundOf(), Colors.transparent);
+      expect(backgroundOf(tester, aboutRow), Colors.transparent);
+    },
+  );
+
+  testWidgets(
+    'hover lands on its final colour in one frame — no cross-fade through '
+    'intermediate colours, which reads as the row changing colour twice',
+    (tester) async {
+      final stores = await boot();
+      await tester.pumpWidget(PreferencesApp(stores: stores));
+      await tester.pumpAndSettle();
+
+      final aboutRow = rowFor('关于');
+      final p = tester.element(find.text('关于')).palette;
+
+      final gesture = await mouse(tester);
+      await gesture.moveTo(tester.getCenter(aboutRow));
+
+      // A single frame, deliberately not pumpAndSettle: an animated fill
+      // would still be at (or part-way from) transparent here.
+      await tester.pump();
+      expect(backgroundOf(tester, aboutRow), p.surface2);
+
+      // And back out, same deal.
+      await gesture.moveTo(Offset.zero);
+      await tester.pump();
+      expect(backgroundOf(tester, aboutRow), Colors.transparent);
     },
   );
 
@@ -67,28 +98,14 @@ void main() {
       await tester.pumpWidget(PreferencesApp(stores: stores));
       await tester.pumpAndSettle();
 
-      final aboutRow = find.ancestor(
-        of: find.text('关于'),
-        matching: find.byType(AnimatedContainer),
-      );
-      Color backgroundOf() =>
-          (tester.widget<AnimatedContainer>(aboutRow).decoration
-                  as BoxDecoration)
-              .color!;
-      final context = tester.element(find.text('关于'));
-      final p = context.palette;
+      final aboutRow = rowFor('关于');
+      final p = tester.element(find.text('关于')).palette;
 
-      final gesture = await tester.createGesture(
-        kind: PointerDeviceKind.mouse,
-      );
-      await gesture.addPointer(location: Offset.zero);
-      addTearDown(gesture.removePointer);
-      await tester.pump();
-
+      final gesture = await mouse(tester);
       final center = tester.getCenter(aboutRow);
       await gesture.moveTo(center);
       await tester.pumpAndSettle();
-      expect(backgroundOf(), p.surface2);
+      expect(backgroundOf(tester, aboutRow), p.surface2);
 
       // A real mouse never sits at the exact same pixel — simulate the
       // sub-pixel noise a trackpad/mouse sensor produces while "still", one
@@ -101,7 +118,7 @@ void main() {
         await gesture.moveTo(jitter);
         await tester.pump(const Duration(milliseconds: 8));
         expect(
-          backgroundOf(),
+          backgroundOf(tester, aboutRow),
           p.surface2,
           reason: 'flickered back out on jitter step $i',
         );
@@ -117,31 +134,16 @@ void main() {
       await tester.pumpWidget(PreferencesApp(stores: stores));
       await tester.pumpAndSettle();
 
-      final aboutRow = find.ancestor(
-        of: find.text('关于'),
-        matching: find.byType(AnimatedContainer),
-      );
-      Color backgroundOf() =>
-          (tester.widget<AnimatedContainer>(aboutRow).decoration
-                  as BoxDecoration)
-              .color!;
-      final context = tester.element(find.text('关于'));
-      final p = context.palette;
+      final aboutRow = rowFor('关于');
+      final p = tester.element(find.text('关于')).palette;
 
-      final gesture = await tester.createGesture(
-        kind: PointerDeviceKind.mouse,
-      );
-      await gesture.addPointer(location: Offset.zero);
-      addTearDown(gesture.removePointer);
-      await tester.pump();
-
+      final gesture = await mouse(tester);
       // Just below the row's own bottom edge — inside the 1.5px padding
       // that used to sit outside MouseRegion (the dead zone between rows).
-      final justPastEdge = tester.getBottomLeft(aboutRow) + const Offset(4, 1);
-      await gesture.moveTo(justPastEdge);
+      await gesture.moveTo(tester.getBottomLeft(aboutRow) + const Offset(4, 1));
       await tester.pumpAndSettle();
 
-      expect(backgroundOf(), p.surface2);
+      expect(backgroundOf(tester, aboutRow), p.surface2);
     },
   );
 }

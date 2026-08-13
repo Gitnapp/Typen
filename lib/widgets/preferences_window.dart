@@ -177,8 +177,11 @@ class _SidebarItemState extends State<_SidebarItem> {
         padding: const EdgeInsets.symmetric(vertical: 1.5),
         child: GestureDetector(
           onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
+          // A plain Container, not an AnimatedContainer: a cross-fade ramps
+          // the background through intermediate colours, which reads as the
+          // row changing colour twice rather than once. Hover should be one
+          // instant swap.
+          child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
             decoration: BoxDecoration(
               color: background,
