@@ -39,6 +39,12 @@ final class PreferencesWindow: NSWindow, NSWindowDelegate {
     RegisterGeneratedPlugins(registry: engine)
 
     let controller = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
+    // Flutter's default is `.inKeyWindow`, which stops delivering hover the
+    // moment this window isn't the key one — coming back from another app
+    // can leave it main-but-not-key, and then the sidebar simply never
+    // highlights. Tracking for the whole active app matches what a user
+    // reads as "the window I'm pointing at".
+    controller.mouseTrackingMode = .inActiveApp
     self.controller = controller
     let registrar = controller.registrar(forPlugin: "TypenNative")
     channel = FlutterMethodChannel(

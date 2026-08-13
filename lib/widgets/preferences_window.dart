@@ -570,7 +570,7 @@ class _AboutPageState extends State<_AboutPage> {
                         ),
                       ),
                       child: Text(
-                        _checking ? '检查中…' : '检查更新…',
+                        _checking ? '检查中' : '检查更新',
                         style: const TextStyle(fontSize: 12),
                       ),
                     ),

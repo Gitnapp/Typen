@@ -46,6 +46,10 @@ final class EditorWindow: NSWindow, NSWindowDelegate {
     // registrar is only meaningful behind a running engine — so both happen
     // before the window exists to hold the controller.
     let controller = FlutterViewController()
+    // See PreferencesWindow: `.inKeyWindow` (Flutter's default) drops hover
+    // whenever this window isn't key, which with several windows open is
+    // most of the time.
+    controller.mouseTrackingMode = .inActiveApp
     _ = controller.view
     RegisterGeneratedPlugins(registry: controller)
     self.controller = controller

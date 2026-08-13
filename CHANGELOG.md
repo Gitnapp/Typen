@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## [2026-08-13] v0.3.13 —— 窗口失去响应：两处生命周期/输入的真实缺陷
+
+针对"打开偏好设置 → 切到别的 app → 切回来，偏好设置就没反应了；此时再开新窗口，旧窗口也跟着没反应"这个反馈。
+
+**必须说明：这两处都是查证过的真实缺陷，但我没能在自动化里复现你那个现象**——用脚本 `activate` 来回切 app 时，偏好设置引擎照样正常重新布局、照样响应。所以下面是"按代码契约改对了两处错"，不是"复现并确认修好了"。需要你实测确认。
+
+### 1. `applicationDidBecomeActive` 没调 super（真实缺陷）
+
+`FlutterAppDelegate` 这几个回调的职责就是把 app 生命周期事件转发给所有已注册的引擎和插件（见 `FlutterAppLifecycleDelegate` 协议，里面明确列了 `applicationDidBecomeActive`/`applicationWillResignActive`）。
+
+我们重写了 `applicationDidBecomeActive` 但**没有调 `super`**，同时又没有重写 `applicationWillResignActive`（所以 super 照常处理）。结果是不对称的：切走时引擎收到"失活"，切回来时"重新激活"被我们吞掉了。生命周期事件是 app 级而不是窗口级的，这也解释了为什么会牵连到其他窗口。`applicationWillTerminate` 同样补上了 super。
+
+### 2. `mouseTrackingMode` 默认只在 key 窗口发 hover
+
+Flutter 的 `FlutterViewController.mouseTrackingMode` 默认是 `.inKeyWindow`——窗口一旦不是 key，hover 事件**完全不发**。而从别的 app 切回来时，窗口可能处于 main 但不是 key 的状态，侧边栏就再也不会高亮。两个窗口都改成 `.inActiveApp`，只要 app 是活动的就跟踪。
+
+### 3. 去掉"检查更新"按钮上的省略号
+
+菜单项里的"检查更新…"保留省略号（macOS 惯例：表示会有后续交互）。
+
+### 验证
+
+- `flutter analyze` 0 issue，`flutter test` 79 个测试全过
+- 写了两个探针脚本（⌘/ 切换模式、调整偏好设置窗口宽度看是否重新布局）来判断引擎死活，都能正确检出"活着"的对照组——但脚本化的 app 切换复现不出这个 bug，所以修复未经实测确认
+
 ## [2026-08-13] v0.3.12 —— 侧边栏 hover 改成一次性变色
 
 侧边栏那一项用的是 `AnimatedContainer`（120ms），hover 时背景色是**渐变**过去的，中间会经过一串插值颜色——看起来就是"颜色变了两段"而不是干净地变一次。改成普通 `Container`，颜色瞬间切换，一次到位。

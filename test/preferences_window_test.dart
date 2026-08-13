@@ -127,6 +127,50 @@ void main() {
   );
 
   testWidgets(
+    'clicking a sidebar item actually switches the page, both directions',
+    (tester) async {
+      final stores = await boot();
+      await tester.pumpWidget(PreferencesApp(stores: stores));
+      await tester.pumpAndSettle();
+
+      // 外观 is the default page: its own sections are up, 关于's are not.
+      expect(find.text('显示'), findsOneWidget);
+      expect(find.text('链接'), findsNothing);
+
+      await tester.tap(find.text('关于'));
+      await tester.pumpAndSettle();
+      expect(find.text('链接'), findsOneWidget, reason: 'never reached 关于');
+      expect(find.text('显示'), findsNothing);
+
+      await tester.tap(find.text('外观').first);
+      await tester.pumpAndSettle();
+      expect(find.text('显示'), findsOneWidget, reason: 'could not go back');
+      expect(find.text('链接'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'the whole row is clickable, not just its label — a tap on the row\'s '
+    'blank right-hand side still switches page',
+    (tester) async {
+      final stores = await boot();
+      await tester.pumpWidget(PreferencesApp(stores: stores));
+      await tester.pumpAndSettle();
+
+      final aboutRow = rowFor('关于');
+      // Well right of the "关于" text, inside the row's own painted box.
+      final blankSpot = Offset(
+        tester.getTopRight(aboutRow).dx - 12,
+        tester.getCenter(aboutRow).dy,
+      );
+      await tester.tapAt(blankSpot);
+      await tester.pumpAndSettle();
+
+      expect(find.text('链接'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'hovering the old dead zone just past a row\'s edge still counts as '
     'hovering that row — MouseRegion has to cover its own outer padding',
     (tester) async {

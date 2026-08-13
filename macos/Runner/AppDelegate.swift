@@ -217,11 +217,26 @@ class AppDelegate: FlutterAppDelegate {
     }
   }
 
+  /// `FlutterAppDelegate`'s whole job for these callbacks is forwarding them
+  /// to every registered engine and plugin as app-lifecycle events — see
+  /// `FlutterAppLifecycleDelegate`, which lists
+  /// `applicationDidBecomeActive`/`WillResignActive` among them.
+  ///
+  /// Overriding this *without* calling super swallowed the "app is active
+  /// again" half of that pair while `applicationWillResignActive` (not
+  /// overridden, so super still handled it) kept delivering the other half.
+  /// Every engine therefore went inactive on the way out and never came
+  /// back: the window kept painting its last frame but stopped reacting to
+  /// hover and clicks, which reads as it freezing after you switch to
+  /// another app and back — and as *other* windows freezing too, since the
+  /// events are app-wide, not per-window.
   override func applicationDidBecomeActive(_ notification: Notification) {
+    super.applicationDidBecomeActive(notification)
     for window in windows { window.notifyActivated() }
   }
 
   override func applicationWillTerminate(_ notification: Notification) {
+    super.applicationWillTerminate(notification)
     for url in securityScoped.values { url.stopAccessingSecurityScopedResource() }
     securityScoped.removeAll()
 
