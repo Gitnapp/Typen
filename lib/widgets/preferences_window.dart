@@ -328,7 +328,12 @@ class _SectionRow extends StatelessWidget {
               style: TextStyle(fontSize: 12.5, color: p.textPrimary),
             ),
           ),
-          Expanded(child: child),
+          // Controls sit against the right edge, so every row's control
+          // lines up down the page instead of starting wherever its label
+          // happens to end.
+          Expanded(
+            child: Align(alignment: Alignment.centerRight, child: child),
+          ),
         ],
       ),
     );
@@ -637,7 +642,16 @@ class _ShortcutFieldState extends State<_ShortcutField> {
       focusNode: _focus,
       onKeyEvent: recording ? _onKey : null,
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          if (!widget.isDefault && !recording)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                '已修改',
+                style: TextStyle(fontSize: 11, color: p.textMuted),
+              ),
+            ),
           MouseRegion(
             cursor: SystemMouseCursors.basic,
             onEnter: (_) => setState(() => _hovered = true),
@@ -672,14 +686,6 @@ class _ShortcutFieldState extends State<_ShortcutField> {
               ),
             ),
           ),
-          if (!widget.isDefault && !recording)
-            Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Text(
-                '已修改',
-                style: TextStyle(fontSize: 11, color: p.textMuted),
-              ),
-            ),
         ],
       ),
     );
@@ -866,14 +872,17 @@ class _AboutPageState extends State<_AboutPage> {
           rows: [
             _SectionRow(
               label: 'GitHub',
-              child: GestureDetector(
-                onTap: () => launchUrl(
-                  Uri.parse('https://github.com/Gitnapp/Typen'),
-                  mode: LaunchMode.externalApplication,
-                ),
-                child: Text(
-                  'Gitnapp/Typen',
-                  style: TextStyle(fontSize: 12.5, color: p.textPrimary),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.basic,
+                child: GestureDetector(
+                  onTap: () => launchUrl(
+                    Uri.parse('https://github.com/Gitnapp/Typen'),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  child: Text(
+                    'Gitnapp/Typen',
+                    style: TextStyle(fontSize: 12.5, color: p.textPrimary),
+                  ),
                 ),
               ),
             ),

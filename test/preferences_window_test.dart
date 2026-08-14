@@ -213,4 +213,39 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'every settings row puts its control against the right edge, and none '
+    'of them shows the pointing-hand cursor',
+    (tester) async {
+      final stores = await boot();
+      await tester.pumpWidget(PreferencesApp(stores: stores));
+      await tester.pumpAndSettle();
+
+      Future<void> checkPage(String sidebarLabel) async {
+        await tester.tap(find.text(sidebarLabel));
+        await tester.pumpAndSettle();
+
+        final rows = find.byType(Align).evaluate().where((e) {
+          final a = e.widget as Align;
+          return a.alignment == Alignment.centerRight;
+        });
+        expect(rows, isNotEmpty, reason: '$sidebarLabel has no aligned rows');
+
+        // No control anywhere in this window asks for the hand.
+        for (final e in find.byType(MouseRegion).evaluate()) {
+          final r = e.widget as MouseRegion;
+          expect(
+            r.cursor,
+            isNot(SystemMouseCursors.click),
+            reason: 'a control on $sidebarLabel still uses the hand cursor',
+          );
+        }
+      }
+
+      await checkPage('快捷键');
+      await checkPage('关于');
+      await checkPage('外观');
+    },
+  );
 }

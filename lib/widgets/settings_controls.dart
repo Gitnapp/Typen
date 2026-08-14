@@ -26,7 +26,9 @@ class SettingsSegmented<T> extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 6),
             child: MouseRegion(
-              cursor: SystemMouseCursors.click,
+              // Arrow, not the hand: this window's controls all read as
+              // native macOS chrome, where a pointing hand means a link.
+              cursor: SystemMouseCursors.basic,
               child: GestureDetector(
                 onTap: () => onChanged(entry.key),
                 child: AnimatedContainer(
@@ -90,6 +92,10 @@ class SettingsSlider extends StatelessWidget {
         Expanded(
           child: SliderTheme(
             data: SliderThemeData(
+              // Slider's own default is the hand — same reasoning as the
+              // segmented pills above.
+              mouseCursor:
+                  const WidgetStatePropertyAll(SystemMouseCursors.basic),
               trackHeight: 3,
               activeTrackColor: p.accent,
               inactiveTrackColor: p.surface3,
