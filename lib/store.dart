@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'native.dart';
+import 'shortcuts.dart';
 
 /// All SharedPreferences-backed persistence lives here so the rest of the app
 /// never touches a key string.
@@ -200,6 +201,49 @@ class Settings extends ChangeNotifier {
   String? get skippedUpdateTag => _prefs.getString('skipped_update_tag');
 
   set skippedUpdateTag(String v) => _prefs.setString('skipped_update_tag', v);
+
+  // ─── Keyboard shortcuts ───────────────────────────────────────────────
+
+  static const _shortcutsKey = 'shortcut_overrides_v1';
+
+  /// Only the bindings that differ from their default are stored, so an
+  /// action whose default changes in a later release follows that change
+  /// unless the user has deliberately rebound it.
+  Map<ShortcutAction, SingleActivator> get shortcutOverrides =>
+      ShortcutCodec.decodeAll(_prefs.getString(_shortcutsKey));
+
+  /// The binding actually in force for [action].
+  SingleActivator activatorFor(ShortcutAction action) =>
+      shortcutOverrides[action] ?? action.defaultActivator;
+
+  /// The action already bound to this keystroke, if any — used to refuse a
+  /// duplicate rather than leave two commands fighting over one key.
+  ShortcutAction? actionBoundTo(SingleActivator a, {ShortcutAction? ignoring}) {
+    for (final action in ShortcutAction.values) {
+      if (action == ignoring) continue;
+      if (sameBinding(activatorFor(action), a)) return action;
+    }
+    return null;
+  }
+
+  Future<void> setShortcut(ShortcutAction action, SingleActivator a) async {
+    final next = Map<ShortcutAction, SingleActivator>.from(shortcutOverrides);
+    if (sameBinding(a, action.defaultActivator)) {
+      next.remove(action);
+    } else {
+      next[action] = a;
+    }
+    await _prefs.setString(_shortcutsKey, ShortcutCodec.encodeAll(next));
+    notifyListeners();
+  }
+
+  /// Drops every override at once — what the "还原默认" button does.
+  Future<void> resetShortcuts() async {
+    await _prefs.remove(_shortcutsKey);
+    notifyListeners();
+  }
+
+  bool get hasShortcutOverrides => shortcutOverrides.isNotEmpty;
 
   /// Re-reads every value from the platform's preferences store. Each Window
   /// runs its own engine with its own `SharedPreferences` cache, so a change

@@ -190,4 +190,27 @@ void main() {
       expect(backgroundOf(tester, aboutRow), p.surface2);
     },
   );
+
+  testWidgets(
+    'a page shorter than the window starts at the top of the pane, not '
+    'floating in the middle of it',
+    (tester) async {
+      final stores = await boot();
+      await tester.pumpWidget(PreferencesApp(stores: stores));
+      await tester.pumpAndSettle();
+
+      final pane = find.byType(Scaffold);
+      final title = find.text('外观').last; // the page heading, not the sidebar
+      final paneTop = tester.getTopLeft(pane).dy;
+      final titleTop = tester.getTopLeft(title).dy;
+
+      // 34 is _PageScaffold's own top padding; a vertically centred pane put
+      // the heading hundreds of pixels further down.
+      expect(
+        titleTop - paneTop,
+        lessThan(60),
+        reason: 'page heading sits ${titleTop - paneTop}px below the pane top',
+      );
+    },
+  );
 }

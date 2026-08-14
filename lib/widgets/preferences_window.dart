@@ -1,9 +1,11 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../native.dart';
+import '../shortcuts.dart';
 import '../store.dart';
 import '../theme.dart';
 import '../update_checker.dart';
@@ -35,7 +37,7 @@ class PreferencesApp extends StatelessWidget {
   }
 }
 
-enum _Category { appearance, about }
+enum _Category { appearance, shortcuts, about }
 
 class PreferencesHome extends StatefulWidget {
   const PreferencesHome({super.key, required this.settings});
@@ -75,7 +77,12 @@ class _PreferencesHomeState extends State<PreferencesHome> {
     final p = context.palette;
     return Scaffold(
       backgroundColor: p.surface2,
+      // stretch, not the default centre: a page shorter than the window
+      // would otherwise shrink-wrap its content and get parked in the
+      // middle of the pane, leaving a large gap above the title instead of
+      // starting at the top.
       body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _Sidebar(
             selected: _category,
@@ -86,6 +93,8 @@ class _PreferencesHomeState extends State<PreferencesHome> {
             child: switch (_category) {
               _Category.appearance =>
                 _AppearancePage(settings: widget.settings),
+              _Category.shortcuts =>
+                _ShortcutsPage(settings: widget.settings),
               _Category.about =>
                 _AboutPage(key: _aboutKey, settings: widget.settings),
             },
@@ -105,6 +114,7 @@ class _Sidebar extends StatelessWidget {
 
   static const _items = [
     (_Category.appearance, CupertinoIcons.paintbrush, '外观'),
+    (_Category.shortcuts, CupertinoIcons.command, '快捷键'),
     (_Category.about, CupertinoIcons.info, '关于'),
   ];
 
@@ -400,6 +410,278 @@ class _AppearancePageState extends State<_AppearancePage> {
           ],
         ),
       ],
+    );
+  }
+}
+
+// ─── 快捷键 ──────────────────────────────────────────────────────────────────
+
+class _ShortcutsPage extends StatefulWidget {
+  const _ShortcutsPage({required this.settings});
+  final Settings settings;
+
+  @override
+  State<_ShortcutsPage> createState() => _ShortcutsPageState();
+}
+
+class _ShortcutsPageState extends State<_ShortcutsPage> {
+  /// The row currently listening for a keystroke, if any.
+  ShortcutAction? _recording;
+
+  /// Set when a captured keystroke is already taken, so the row can say so
+  /// instead of silently refusing.
+  String? _conflict;
+
+  void _startRecording(ShortcutAction action) {
+    setState(() {
+      _recording = action;
+      _conflict = null;
+    });
+  }
+
+  void _cancel() => setState(() {
+        _recording = null;
+        _conflict = null;
+      });
+
+  /// Applies a captured keystroke, refusing one that another command already
+  /// answers — two menu items on one key is a silent, confusing failure.
+  Future<void> _capture(ShortcutAction action, SingleActivator a) async {
+    final clash = widget.settings.actionBoundTo(a, ignoring: action);
+    if (clash != null) {
+      setState(() => _conflict = '已被「${clash.label}」占用');
+      return;
+    }
+    await widget.settings.setShortcut(action, a);
+    Native.notifySettingsChanged();
+    if (mounted) _cancel();
+  }
+
+  Future<void> _resetAll() async {
+    await widget.settings.resetShortcuts();
+    Native.notifySettingsChanged();
+    if (mounted) _cancel();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return _PageScaffold(
+      title: '快捷键',
+      sections: [
+        _Section(
+          heading: '命令',
+          rows: [
+            for (final action in ShortcutAction.values)
+              _SectionRow(
+                label: action.label,
+                child: _ShortcutField(
+                  current: widget.settings.activatorFor(action),
+                  isDefault: !widget.settings.shortcutOverrides
+                      .containsKey(action),
+                  recording: _recording == action,
+                  conflict: _recording == action ? _conflict : null,
+                  onStart: () => _startRecording(action),
+                  onCancel: _cancel,
+                  onCapture: (a) => _capture(action, a),
+                ),
+              ),
+          ],
+        ),
+        _Section(
+          heading: '重置',
+          rows: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.settings.hasShortcutOverrides
+                          ? '把所有快捷键恢复成出厂设置'
+                          : '当前全部是默认快捷键',
+                      style: TextStyle(fontSize: 12.5, color: p.textSecondary),
+                    ),
+                  ),
+                  OutlinedButton(
+                    onPressed:
+                        widget.settings.hasShortcutOverrides ? _resetAll : null,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: p.textPrimary,
+                      side: BorderSide(color: p.border),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(kRadiusControl),
+                      ),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      textStyle: const TextStyle(fontSize: 12.5),
+                    ),
+                    child: const Text('还原默认'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One row's binding: shows it, and turns into a key recorder when clicked.
+class _ShortcutField extends StatefulWidget {
+  const _ShortcutField({
+    required this.current,
+    required this.isDefault,
+    required this.recording,
+    required this.conflict,
+    required this.onStart,
+    required this.onCancel,
+    required this.onCapture,
+  });
+
+  final SingleActivator current;
+  final bool isDefault;
+  final bool recording;
+  final String? conflict;
+  final VoidCallback onStart;
+  final VoidCallback onCancel;
+  final ValueChanged<SingleActivator> onCapture;
+
+  @override
+  State<_ShortcutField> createState() => _ShortcutFieldState();
+}
+
+class _ShortcutFieldState extends State<_ShortcutField> {
+  final _focus = FocusNode();
+  bool _hovered = false;
+
+  @override
+  void didUpdateWidget(_ShortcutField old) {
+    super.didUpdateWidget(old);
+    if (widget.recording && !old.recording) _focus.requestFocus();
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  /// A bare modifier is someone still assembling a chord, not a binding —
+  /// only a real key ends the recording.
+  static final _modifiers = <LogicalKeyboardKey>{
+    LogicalKeyboardKey.meta, LogicalKeyboardKey.metaLeft,
+    LogicalKeyboardKey.metaRight, LogicalKeyboardKey.shift,
+    LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.shiftRight,
+    LogicalKeyboardKey.alt, LogicalKeyboardKey.altLeft,
+    LogicalKeyboardKey.altRight, LogicalKeyboardKey.control,
+    LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.controlRight,
+    LogicalKeyboardKey.capsLock, LogicalKeyboardKey.fn,
+  };
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.handled;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      widget.onCancel();
+      return KeyEventResult.handled;
+    }
+    if (_modifiers.contains(key)) return KeyEventResult.handled;
+
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    bool held(Set<LogicalKeyboardKey> keys) => keys.any(pressed.contains);
+    widget.onCapture(SingleActivator(
+      key,
+      meta: held({
+        LogicalKeyboardKey.meta,
+        LogicalKeyboardKey.metaLeft,
+        LogicalKeyboardKey.metaRight,
+      }),
+      shift: held({
+        LogicalKeyboardKey.shift,
+        LogicalKeyboardKey.shiftLeft,
+        LogicalKeyboardKey.shiftRight,
+      }),
+      alt: held({
+        LogicalKeyboardKey.alt,
+        LogicalKeyboardKey.altLeft,
+        LogicalKeyboardKey.altRight,
+      }),
+      control: held({
+        LogicalKeyboardKey.control,
+        LogicalKeyboardKey.controlLeft,
+        LogicalKeyboardKey.controlRight,
+      }),
+    ));
+    return KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final recording = widget.recording;
+    final label = recording
+        ? (widget.conflict ?? '按下新的组合键…')
+        : describeActivator(widget.current);
+    final Color background;
+    if (recording) {
+      background = p.surface3;
+    } else if (_hovered) {
+      background = p.surface2;
+    } else {
+      background = Colors.transparent;
+    }
+
+    return Focus(
+      focusNode: _focus,
+      onKeyEvent: recording ? _onKey : null,
+      child: Row(
+        children: [
+          MouseRegion(
+            cursor: SystemMouseCursors.basic,
+            onEnter: (_) => setState(() => _hovered = true),
+            onExit: (_) => setState(() => _hovered = false),
+            child: GestureDetector(
+              onTap: recording ? widget.onCancel : widget.onStart,
+              child: Container(
+                width: 132,
+                alignment: Alignment.center,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: background,
+                  borderRadius: BorderRadius.circular(kRadiusControl),
+                  border: Border.all(
+                    color: widget.conflict != null
+                        ? p.destructive
+                        : (recording ? p.accent : p.border),
+                  ),
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: widget.conflict != null
+                        ? p.destructive
+                        : p.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (!widget.isDefault && !recording)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                '已修改',
+                style: TextStyle(fontSize: 11, color: p.textMuted),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

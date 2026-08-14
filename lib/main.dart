@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'document_file.dart';
 import 'find.dart';
 import 'native.dart';
+import 'shortcuts.dart';
 import 'store.dart';
 import 'theme.dart';
 import 'update_checker.dart';
@@ -735,6 +736,12 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     );
   }
 
+  /// A menu item's binding, as the user currently has it — the Preferences
+  /// window writes overrides into Settings and broadcasts, and this rebuilds
+  /// with the menu bar.
+  SingleActivator _shortcut(ShortcutAction action) =>
+      widget.stores.settings.activatorFor(action);
+
   // ─── Menu bar ─────────────────────────────────────────────────────────────
 
   List<PlatformMenuItem> _menus() => [
@@ -756,10 +763,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
           members: [
             PlatformMenuItem(
               label: '偏好设置…',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.comma,
-                meta: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.preferences),
               onSelected: Native.openPreferences,
             ),
           ],
@@ -796,27 +800,17 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
           members: [
             PlatformMenuItem(
               label: '新建',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyN,
-                meta: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.newDocument),
               onSelected: _newDocument,
             ),
             PlatformMenuItem(
               label: '新建窗口',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyN,
-                meta: true,
-                shift: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.newWindow),
               onSelected: Native.newWindow,
             ),
             PlatformMenuItem(
               label: '打开…',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyO,
-                meta: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.open),
               onSelected: _openPicker,
             ),
             PlatformMenu(label: '打开最近', menus: _recentMenuItems()),
@@ -826,10 +820,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
           members: [
             PlatformMenuItem(
               label: '关闭窗口',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyW,
-                meta: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.closeWindow),
               onSelected: Native.closeWindow,
             ),
           ],
@@ -838,19 +829,12 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
           members: [
             PlatformMenuItem(
               label: '保存',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyS,
-                meta: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.save),
               onSelected: _save,
             ),
             PlatformMenuItem(
               label: '另存为…',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyS,
-                meta: true,
-                shift: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.saveAs),
               onSelected: _saveAs,
             ),
           ],
@@ -933,36 +917,22 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
           members: [
             PlatformMenuItem(
               label: '查找…',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyF,
-                meta: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.find),
               onSelected: _openFind,
             ),
             PlatformMenuItem(
               label: '查找与替换…',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyF,
-                meta: true,
-                alt: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.findReplace),
               onSelected: () => _openFind(replace: true),
             ),
             PlatformMenuItem(
               label: '查找下一个',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyG,
-                meta: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.findNext),
               onSelected: () => _stepFind(1),
             ),
             PlatformMenuItem(
               label: '查找上一个',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyG,
-                meta: true,
-                shift: true,
-              ),
+              shortcut: _shortcut(ShortcutAction.findPrevious),
               onSelected: () => _stepFind(-1),
             ),
           ],
@@ -974,7 +944,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
       menus: [
         PlatformMenuItem(
           label: _mode == EditorMode.source ? '预览' : '回到源码',
-          shortcut: const SingleActivator(LogicalKeyboardKey.slash, meta: true),
+          shortcut: _shortcut(ShortcutAction.toggleMode),
           onSelected: _toggleMode,
         ),
         const PlatformMenuItemGroup(
