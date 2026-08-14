@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:typen/main.dart';
 import 'package:typen/store.dart';
 
@@ -310,5 +311,30 @@ void main() {
 
     expect(file.readAsStringSync(), 'their edit\n');
     expect(quit.reply, isFalse);
+  }, variant: onMacOS);
+
+  testWidgets(
+      'a document too short to scroll previews flush to the top, not centred',
+      (tester) async {
+    final file = seed('# 只有一行\n');
+    await boot(tester);
+    await openInApp(tester, file);
+
+    await tester.tap(find.byTooltip('切换模式（⌘/）'));
+    await flush(tester);
+
+    final scroller = find.byType(SingleChildScrollView);
+    expect(scroller, findsOneWidget);
+    final viewportTop = tester.getTopLeft(scroller).dy;
+    final contentTop = tester.getTopLeft(find.byType(MarkdownBody)).dy;
+
+    // 24 is the preview's own top padding; anything much past that means
+    // something is pushing the content down the viewport.
+    expect(
+      contentTop - viewportTop,
+      closeTo(24, 4),
+      reason: 'preview content sits ${contentTop - viewportTop}px below the '
+          'viewport top — expected it flush under the 24px padding',
+    );
   }, variant: onMacOS);
 }

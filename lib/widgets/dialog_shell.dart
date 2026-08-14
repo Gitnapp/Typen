@@ -61,11 +61,18 @@ class _AppDialogShell<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // Same card chrome as `_Section` in the Preferences window — surface0
+    // with a hairline border and no shadow. A dialog drawn on surface1 with
+    // elevation 24 instead reads as a heavier, different-looking card than
+    // everything else in the app, which is the one thing a shared shell is
+    // supposed to prevent.
     return Dialog(
-      backgroundColor: p.surface1,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusSurface)),
-      elevation: 24,
+      backgroundColor: p.surface0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(kRadiusSurface),
+        side: BorderSide(color: p.border),
+      ),
+      elevation: 0,
       child: SizedBox(
         width: 380,
         child: Padding(
