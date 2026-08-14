@@ -78,8 +78,11 @@ class EditorPane extends StatelessWidget {
                 offstage: mode != EditorMode.source,
                 child: _buildSource(palette, side),
               ),
+              // Fills the Stack rather than wrapping its content: the
+              // viewport has to span the window so the scrollbar rides the
+              // window edge, the way the source view's does.
               if (mode == EditorMode.preview)
-                _buildPreview(context, palette, side),
+                Positioned.fill(child: _buildPreview(context, palette, side)),
             ],
           );
         },

@@ -337,4 +337,27 @@ void main() {
           'viewport top — expected it flush under the 24px padding',
     );
   }, variant: onMacOS);
+
+  testWidgets('preview keeps text on the left, the way the source view does',
+      (tester) async {
+    final file = seed('123\n\n额\n');
+    await boot(tester);
+    await openInApp(tester, file);
+
+    final sourceLeft =
+        tester.getTopLeft(find.textContaining('123', findRichText: true).first).dx;
+
+    await tester.tap(find.byTooltip('切换模式（⌘/）'));
+    await flush(tester);
+
+    final previewText = find.textContaining('123', findRichText: true).first;
+    final previewLeft = tester.getTopLeft(previewText).dx;
+
+    expect(
+      previewLeft,
+      closeTo(sourceLeft, 8),
+      reason: 'preview text starts at \$previewLeft but the source view '
+          'starts it at \$sourceLeft — the preview is centring it',
+    );
+  }, variant: onMacOS);
 }

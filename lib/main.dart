@@ -679,7 +679,13 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
         },
         child: Scaffold(
           backgroundColor: palette.surface0,
+          // stretch, not the default centre: the editor pane would otherwise
+          // get loose width and shrink to its content. The source view hides
+          // that (a TextField takes all the width it is offered), but the
+          // preview's MarkdownBody wraps its content — so switching to
+          // preview visibly re-centred the whole column.
           body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _TitleBar(
                 title: _activePath == null ? 'Untitled' : p.basename(_activePath!),
