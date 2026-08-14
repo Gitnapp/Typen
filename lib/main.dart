@@ -1162,7 +1162,10 @@ class _ModePill extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             curve: kAppEase,
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+            // Tight to the two characters it holds: this pill sits in the
+            // title strip next to the filename, so it reads as chrome only
+            // while it stays small.
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
               color: isPreview ? p.surface3 : p.surface2,
               borderRadius: BorderRadius.circular(kRadiusControl),
