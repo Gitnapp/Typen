@@ -19,7 +19,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.gold,
     required this.coral,
     required this.emerald,
-    required this.accent,
     required this.destructive,
     required this.selection,
     required this.findMatch,
@@ -47,10 +46,17 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color coral;
   final Color emerald;
 
-  /// macOS system blue/red — interactive controls only (buttons, sliders,
-  /// links, switches), so they read as native chrome rather than branded
-  /// document content. Kept apart from [gold]/[coral] on purpose.
-  final Color accent;
+  /// The "on" colour for controls: a selected chip, a slider's filled
+  /// track, a switch that is on. Deliberately not a hue — it is whatever
+  /// stands hardest against the surface, so it is near-white on the dark
+  /// palette and near-black on the light one. A fixed white would vanish on
+  /// paper; a fixed blue would be the one saturated thing in a monochrome
+  /// window.
+  Color get accent => textPrimary;
+
+  /// Text drawn *on* [accent], which is the surface colour inverted back.
+  Color get onAccent => surface0;
+
   final Color destructive;
 
   final Color selection;
@@ -72,7 +78,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     gold: Color(0xFFD4A93A),
     coral: Color(0xFFF08A3E),
     emerald: Color(0xFF4A8A5C),
-    accent: Color(0xFF0A84FF),
     destructive: Color(0xFFFF453A),
     selection: Color(0x47D4A93A),
     findMatch: Color(0x38D4A93A),
@@ -94,7 +99,6 @@ class AppPalette extends ThemeExtension<AppPalette> {
     gold: Color(0xFF9A7712),
     coral: Color(0xFFC2621C),
     emerald: Color(0xFF2F6B41),
-    accent: Color(0xFF007AFF),
     destructive: Color(0xFFFF3B30),
     selection: Color(0x479A7712),
     findMatch: Color(0x389A7712),
@@ -123,6 +127,10 @@ const Cubic kAppEase = Cubic(0.22, 1, 0.36, 1);
 /// mismatches the shape it's highlighting.
 const double kRadiusControl = 8;
 const double kRadiusSurface = 14;
+
+/// Every button, chip and field in the app is this tall. One number, so a
+/// row of controls never reads as a jumble of slightly different sizes.
+const double kControlHeight = 28;
 
 ThemeData buildAppTheme(AppPalette p) {
   // No ripple anywhere — a static hover/press fill instead, same idea as

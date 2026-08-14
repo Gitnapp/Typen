@@ -144,10 +144,21 @@ class Settings extends ChangeNotifier {
 
   final SharedPreferences _prefs;
 
-  static const minFontSize = 12.0;
-  static const maxFontSize = 24.0;
-  static const minColumnWidth = 560.0;
-  static const maxColumnWidth = 1100.0;
+  /// The base font size, in the discrete steps the slider offers. Every
+  /// other size in the editor is derived from it (headings multiply it,
+  /// inline code scales it down), so this is the one number that moves the
+  /// whole document's typography.
+  static const fontSizeSteps = [12.0, 13.0, 14.0, 15.0, 16.0, 18.0, 20.0, 22.0, 24.0];
+  static double get minFontSize => fontSizeSteps.first;
+  static double get maxFontSize => fontSizeSteps.last;
+
+  /// Symmetric left/right inset for the text, in logical pixels, in the
+  /// steps the slider offers. Unlike the old "column width" it does not cap
+  /// how wide the text may run — widen the window and the text follows,
+  /// with the margin staying put.
+  static const indentSteps = [24.0, 40.0, 64.0, 96.0, 140.0, 200.0, 280.0];
+  static double get minIndent => indentSteps.first;
+  static double get maxIndent => indentSteps.last;
 
   ThemeMode get themeMode => switch (_prefs.getString('theme_mode')) {
         'light' => ThemeMode.light,
@@ -160,19 +171,38 @@ class Settings extends ChangeNotifier {
     notifyListeners();
   }
 
-  double get fontSize =>
-      (_prefs.getDouble('font_size') ?? 15.0).clamp(minFontSize, maxFontSize);
+  double get fontSize => snapFontSize(_prefs.getDouble('font_size') ?? 15.0);
 
   set fontSize(double v) {
-    _prefs.setDouble('font_size', v.clamp(minFontSize, maxFontSize));
+    _prefs.setDouble('font_size', snapFontSize(v));
     notifyListeners();
   }
 
-  double get columnWidth => (_prefs.getDouble('column_width') ?? 760.0)
-      .clamp(minColumnWidth, maxColumnWidth);
+  /// Rounds to the nearest offered step, so a value stored by an older
+  /// build (or a stray drag) still lands on a real notch.
+  static double snapFontSize(double v) => _snap(v, fontSizeSteps);
 
-  set columnWidth(double v) {
-    _prefs.setDouble('column_width', v.clamp(minColumnWidth, maxColumnWidth));
+  static double _snap(double v, List<double> steps) {
+    var best = steps.first;
+    for (final step in steps) {
+      if ((step - v).abs() < (best - v).abs()) best = step;
+    }
+    return best;
+  }
+
+  double get indent => _snap(_prefs.getDouble('indent') ?? 64.0, indentSteps);
+
+  set indent(double v) {
+    _prefs.setDouble('indent', _snap(v, indentSteps));
+    notifyListeners();
+  }
+
+  /// Soft-wrap long lines to the text column. Off means a long line runs on
+  /// and the editor scrolls horizontally to follow it.
+  bool get softWrap => _prefs.getBool('soft_wrap') ?? true;
+
+  set softWrap(bool v) {
+    _prefs.setBool('soft_wrap', v);
     notifyListeners();
   }
 

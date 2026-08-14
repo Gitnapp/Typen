@@ -91,12 +91,14 @@ class _PreferencesHomeState extends State<PreferencesHome> {
           Container(width: 1, color: p.border),
           Expanded(
             child: switch (_category) {
-              _Category.appearance =>
-                _AppearancePage(settings: widget.settings),
-              _Category.shortcuts =>
-                _ShortcutsPage(settings: widget.settings),
-              _Category.about =>
-                _AboutPage(key: _aboutKey, settings: widget.settings),
+              _Category.appearance => _AppearancePage(
+                settings: widget.settings,
+              ),
+              _Category.shortcuts => _ShortcutsPage(settings: widget.settings),
+              _Category.about => _AboutPage(
+                key: _aboutKey,
+                settings: widget.settings,
+              ),
             },
           ),
         ],
@@ -210,8 +212,9 @@ class _SidebarItemState extends State<_SidebarItem> {
                   style: TextStyle(
                     fontSize: 12.5,
                     color: widget.selected ? p.textPrimary : p.textSecondary,
-                    fontWeight:
-                        widget.selected ? FontWeight.w600 : FontWeight.w400,
+                    fontWeight: widget.selected
+                        ? FontWeight.w600
+                        : FontWeight.w400,
                   ),
                 ),
               ],
@@ -317,24 +320,30 @@ class _SectionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 90,
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 12.5, color: p.textPrimary),
+    // A fixed height, not vertical padding: rows hold controls of quite
+    // different natural heights (a slider, a switch, a row of chips), and
+    // padding alone would let each one set its own row height.
+    return SizedBox(
+      height: 42,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 90,
+              child: Text(
+                label,
+                style: TextStyle(fontSize: 12.5, color: p.textPrimary),
+              ),
             ),
-          ),
-          // Controls sit against the right edge, so every row's control
-          // lines up down the page instead of starting wherever its label
-          // happens to end.
-          Expanded(
-            child: Align(alignment: Alignment.centerRight, child: child),
-          ),
-        ],
+            // Controls sit against the right edge, so every row's control
+            // lines up down the page instead of starting wherever its label
+            // happens to end.
+            Expanded(
+              child: Align(alignment: Alignment.centerRight, child: child),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -383,25 +392,33 @@ class _AppearancePageState extends State<_AppearancePage> {
           heading: '编辑器',
           rows: [
             _SectionRow(
-              label: '字号',
-              child: SettingsSlider(
+              // Named for what it actually is: headings and inline code are
+              // multiples of this number, so moving it moves the whole
+              // document's typography, not just body text.
+              label: '基础字号',
+              child: SettingsStepSlider(
                 value: s.fontSize,
-                min: Settings.minFontSize,
-                max: Settings.maxFontSize,
+                steps: Settings.fontSizeSteps,
                 display: s.fontSize.toStringAsFixed(0),
                 onChanged: (v) => setState(() => s.fontSize = v),
                 onChangeEnd: (_) => Native.notifySettingsChanged(),
               ),
             ),
             _SectionRow(
-              label: '列宽',
-              child: SettingsSlider(
-                value: s.columnWidth,
-                min: Settings.minColumnWidth,
-                max: Settings.maxColumnWidth,
-                display: s.columnWidth.toStringAsFixed(0),
-                onChanged: (v) => setState(() => s.columnWidth = v),
+              label: '缩进',
+              child: SettingsStepSlider(
+                value: s.indent,
+                steps: Settings.indentSteps,
+                display: s.indent.toStringAsFixed(0),
+                onChanged: (v) => setState(() => s.indent = v),
                 onChangeEnd: (_) => Native.notifySettingsChanged(),
+              ),
+            ),
+            _SectionRow(
+              label: '自动换行',
+              child: SettingsToggle(
+                value: s.softWrap,
+                onChanged: (v) => _commit(() => s.softWrap = v),
               ),
             ),
             _SectionRow(
@@ -445,9 +462,9 @@ class _ShortcutsPageState extends State<_ShortcutsPage> {
   }
 
   void _cancel() => setState(() {
-        _recording = null;
-        _conflict = null;
-      });
+    _recording = null;
+    _conflict = null;
+  });
 
   /// Applies a captured keystroke, refusing one that another command already
   /// answers — two menu items on one key is a silent, confusing failure.
@@ -482,8 +499,9 @@ class _ShortcutsPageState extends State<_ShortcutsPage> {
                 label: action.label,
                 child: _ShortcutField(
                   current: widget.settings.activatorFor(action),
-                  isDefault: !widget.settings.shortcutOverrides
-                      .containsKey(action),
+                  isDefault: !widget.settings.shortcutOverrides.containsKey(
+                    action,
+                  ),
                   recording: _recording == action,
                   conflict: _recording == action ? _conflict : null,
                   onStart: () => _startRecording(action),
@@ -508,17 +526,24 @@ class _ShortcutsPageState extends State<_ShortcutsPage> {
                       style: TextStyle(fontSize: 12.5, color: p.textSecondary),
                     ),
                   ),
-                  OutlinedButton(
-                    onPressed:
-                        widget.settings.hasShortcutOverrides ? _resetAll : null,
-                    style: OutlinedButton.styleFrom(
+                  FilledButton(
+                    onPressed: widget.settings.hasShortcutOverrides
+                        ? _resetAll
+                        : null,
+                    style: FilledButton.styleFrom(
                       foregroundColor: p.textPrimary,
-                      side: BorderSide(color: p.border),
+                      backgroundColor: p.surface2,
+                      overlayColor: p.surface3,
+                      disabledBackgroundColor: p.surface2,
+                      disabledForegroundColor: p.textMuted,
+                      elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(kRadiusControl),
                       ),
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 9,
+                      ),
                       textStyle: const TextStyle(fontSize: 12.5),
                     ),
                     child: const Text('还原默认'),
@@ -576,13 +601,20 @@ class _ShortcutFieldState extends State<_ShortcutField> {
   /// A bare modifier is someone still assembling a chord, not a binding —
   /// only a real key ends the recording.
   static final _modifiers = <LogicalKeyboardKey>{
-    LogicalKeyboardKey.meta, LogicalKeyboardKey.metaLeft,
-    LogicalKeyboardKey.metaRight, LogicalKeyboardKey.shift,
-    LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.shiftRight,
-    LogicalKeyboardKey.alt, LogicalKeyboardKey.altLeft,
-    LogicalKeyboardKey.altRight, LogicalKeyboardKey.control,
-    LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.controlRight,
-    LogicalKeyboardKey.capsLock, LogicalKeyboardKey.fn,
+    LogicalKeyboardKey.meta,
+    LogicalKeyboardKey.metaLeft,
+    LogicalKeyboardKey.metaRight,
+    LogicalKeyboardKey.shift,
+    LogicalKeyboardKey.shiftLeft,
+    LogicalKeyboardKey.shiftRight,
+    LogicalKeyboardKey.alt,
+    LogicalKeyboardKey.altLeft,
+    LogicalKeyboardKey.altRight,
+    LogicalKeyboardKey.control,
+    LogicalKeyboardKey.controlLeft,
+    LogicalKeyboardKey.controlRight,
+    LogicalKeyboardKey.capsLock,
+    LogicalKeyboardKey.fn,
   };
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -596,29 +628,31 @@ class _ShortcutFieldState extends State<_ShortcutField> {
 
     final pressed = HardwareKeyboard.instance.logicalKeysPressed;
     bool held(Set<LogicalKeyboardKey> keys) => keys.any(pressed.contains);
-    widget.onCapture(SingleActivator(
-      key,
-      meta: held({
-        LogicalKeyboardKey.meta,
-        LogicalKeyboardKey.metaLeft,
-        LogicalKeyboardKey.metaRight,
-      }),
-      shift: held({
-        LogicalKeyboardKey.shift,
-        LogicalKeyboardKey.shiftLeft,
-        LogicalKeyboardKey.shiftRight,
-      }),
-      alt: held({
-        LogicalKeyboardKey.alt,
-        LogicalKeyboardKey.altLeft,
-        LogicalKeyboardKey.altRight,
-      }),
-      control: held({
-        LogicalKeyboardKey.control,
-        LogicalKeyboardKey.controlLeft,
-        LogicalKeyboardKey.controlRight,
-      }),
-    ));
+    widget.onCapture(
+      SingleActivator(
+        key,
+        meta: held({
+          LogicalKeyboardKey.meta,
+          LogicalKeyboardKey.metaLeft,
+          LogicalKeyboardKey.metaRight,
+        }),
+        shift: held({
+          LogicalKeyboardKey.shift,
+          LogicalKeyboardKey.shiftLeft,
+          LogicalKeyboardKey.shiftRight,
+        }),
+        alt: held({
+          LogicalKeyboardKey.alt,
+          LogicalKeyboardKey.altLeft,
+          LogicalKeyboardKey.altRight,
+        }),
+        control: held({
+          LogicalKeyboardKey.control,
+          LogicalKeyboardKey.controlLeft,
+          LogicalKeyboardKey.controlRight,
+        }),
+      ),
+    );
     return KeyEventResult.handled;
   }
 
@@ -629,14 +663,22 @@ class _ShortcutFieldState extends State<_ShortcutField> {
     final label = recording
         ? (widget.conflict ?? '按下新的组合键…')
         : describeActivator(widget.current);
+    // Fill carries every state — resting, hover, recording, clash — so the
+    // field matches the app's other buttons instead of being the one thing
+    // with an outline.
     final Color background;
-    if (recording) {
-      background = p.surface3;
+    if (widget.conflict != null) {
+      background = p.destructive;
+    } else if (recording) {
+      background = p.accent;
     } else if (_hovered) {
-      background = p.surface2;
+      background = p.surface3;
     } else {
-      background = Colors.transparent;
+      background = p.surface2;
     }
+    final Color foreground = (recording || widget.conflict != null)
+        ? Colors.white
+        : p.textPrimary;
 
     return Focus(
       focusNode: _focus,
@@ -659,29 +701,21 @@ class _ShortcutFieldState extends State<_ShortcutField> {
             child: GestureDetector(
               onTap: recording ? widget.onCancel : widget.onStart,
               child: Container(
-                width: 132,
+                // Explicit box: the row is a fixed height, and without its
+                // own height this fill would stretch to fill the whole row.
+                width: 118,
+                height: kControlHeight,
                 alignment: Alignment.center,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 decoration: BoxDecoration(
                   color: background,
                   borderRadius: BorderRadius.circular(kRadiusControl),
-                  border: Border.all(
-                    color: widget.conflict != null
-                        ? p.destructive
-                        : (recording ? p.accent : p.border),
-                  ),
                 ),
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: widget.conflict != null
-                        ? p.destructive
-                        : p.textPrimary,
-                  ),
+                  style: TextStyle(fontSize: 12.5, color: foreground),
                 ),
               ),
             ),
@@ -802,8 +836,7 @@ class _AboutPageState extends State<_AboutPage> {
           heading: 'Typen',
           rows: [
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               child: Row(
                 children: [
                   Container(
@@ -849,17 +882,31 @@ class _AboutPageState extends State<_AboutPage> {
                       style: TextStyle(color: p.textMuted, fontSize: 12),
                     )
                   else
-                    TextButton(
-                      onPressed: _checking ? null : runCheck,
-                      style: TextButton.styleFrom(
-                        foregroundColor: p.textPrimary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(kRadiusControl),
+                    // A filled button like every other control in this
+                    // window, sized explicitly so the row height cannot
+                    // stretch it into a slab.
+                    SizedBox(
+                      height: kControlHeight,
+                      child: FilledButton(
+                        onPressed: _checking ? null : runCheck,
+                        style: FilledButton.styleFrom(
+                          foregroundColor: p.textPrimary,
+                          backgroundColor: p.surface2,
+                          overlayColor: p.surface3,
+                          disabledBackgroundColor: p.surface2,
+                          disabledForegroundColor: p.textMuted,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(kRadiusControl),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        _checking ? '检查中' : '检查更新',
-                        style: const TextStyle(fontSize: 12),
+                        child: Text(
+                          _checking ? '检查中' : '检查更新',
+                          style: const TextStyle(fontSize: 12),
+                        ),
                       ),
                     ),
                 ],

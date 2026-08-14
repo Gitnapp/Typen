@@ -64,9 +64,12 @@ class EditorPane extends StatelessWidget {
       // instead of narrowing the viewport.
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final side = math.max(
-            _minSideInset,
-            (constraints.maxWidth - settings.columnWidth) / 2,
+          // The user's indent, but never so wide on a narrow window that the
+          // text is squeezed into nothing — leave a readable column no matter
+          // how the two are combined.
+          final side = math.min(
+            settings.indent,
+            math.max(_minSideInset, (constraints.maxWidth - 240) / 2),
           );
           // The source field stays mounted while previewing so its undo stack,
           // selection and scroll position survive a mode switch. The preview
@@ -76,7 +79,7 @@ class EditorPane extends StatelessWidget {
             children: [
               Offstage(
                 offstage: mode != EditorMode.source,
-                child: _buildSource(palette, side),
+                child: _buildSource(palette, side, constraints.maxWidth),
               ),
               // Fills the Stack rather than wrapping its content: the
               // viewport has to span the window so the scrollbar rides the
@@ -90,7 +93,22 @@ class EditorPane extends StatelessWidget {
     );
   }
 
-  Widget _buildSource(AppPalette palette, double side) {
+  Widget _buildSource(AppPalette palette, double side, double viewportWidth) {
+    if (settings.softWrap) return _sourceField(palette, side);
+    // Wrapping off: the field has to be free to run past the viewport, so it
+    // sits in a horizontal scroller and takes the width of its longest line
+    // (never less than the viewport, or short documents would shrink the
+    // editable area to a sliver).
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minWidth: viewportWidth),
+        child: IntrinsicWidth(child: _sourceField(palette, side)),
+      ),
+    );
+  }
+
+  Widget _sourceField(AppPalette palette, double side) {
     // The field fills the pane edge to edge: the scrollbar then rides the
     // window edge with a thumb track exactly as tall as the viewport, and the
     // horizontal inset sits *inside* the field, where it moves the text

@@ -360,4 +360,30 @@ void main() {
           'starts it at \$sourceLeft — the preview is centring it',
     );
   }, variant: onMacOS);
+
+  testWidgets('turning soft wrap off lets a long line run past the viewport',
+      (tester) async {
+    final long = '${'x' * 400}\n';
+    final file = seed(long);
+    final stores = await boot(tester);
+    await openInApp(tester, file);
+
+    // Wrapping on: the field is capped at the viewport, so the text wraps
+    // and there is no horizontal scroller.
+    expect(
+      find.byWidgetPredicate((w) =>
+          w is SingleChildScrollView && w.scrollDirection == Axis.horizontal),
+      findsNothing,
+    );
+
+    stores.settings.softWrap = false;
+    await flush(tester);
+
+    expect(
+      find.byWidgetPredicate((w) =>
+          w is SingleChildScrollView && w.scrollDirection == Axis.horizontal),
+      findsOneWidget,
+      reason: 'no horizontal scroller appeared for the unwrapped line',
+    );
+  }, variant: onMacOS);
 }
