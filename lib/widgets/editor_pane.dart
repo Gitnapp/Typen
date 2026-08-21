@@ -88,6 +88,16 @@ class EditorPane extends StatelessWidget {
   final Settings settings;
   final String? documentDir;
 
+  /// Identifies the source field's element across a soft-wrap toggle, which
+  /// swaps whether it sits directly under [Offstage] or inside an extra
+  /// horizontal [SingleChildScrollView]. Without it that swap looks like a
+  /// different widget to Flutter, which tears down the old element and
+  /// mounts a new one in the same frame — briefly leaving [scrollController]
+  /// attached to both and tripping "attached to multiple scroll views".
+  /// A GlobalKey instead makes Flutter move the existing element (and its
+  /// live scroll attachment) to its new parent.
+  static final _sourceFieldKey = GlobalKey(debugLabel: 'sourceField');
+
   static const monoFamily = 'Menlo';
   static const sourceBottomSpaceKey = ValueKey('source-bottom-space');
 
@@ -164,6 +174,7 @@ class EditorPane extends StatelessWidget {
     // horizontal inset sits *inside* the field, where it moves the text
     // without narrowing that viewport.
     return Scrollbar(
+      key: _sourceFieldKey,
       controller: scrollController,
       child: ScrollConfiguration(
         // TextField forces a scrollbar of its own on every multi-line field

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:http/http.dart' as http;
 
 import 'native.dart';
@@ -27,13 +26,9 @@ class UpdateFailure implements Exception {
 
 /// Downloads, verifies, and installs a release.
 ///
-/// Everything through signature verification happens entirely inside the
-/// app's own sandbox container — no grant needed. The final step (replacing
-/// the installed bundle) is the one place App Sandbox requires a user grant:
-/// there is no "arbitrary filesystem write" entitlement that would let this
-/// happen with zero prompts, so the last click is a native folder picker
-/// pointed at /Applications rather than a second confirmation dialog. See
-/// `macos/Runner/Release.entitlements`.
+/// Typen ships outside the Mac App Store (Developer ID + notarization), so
+/// it does not run under App Sandbox and needs no user grant to write
+/// `/Applications` — the whole install is silent.
 class Updater {
   const Updater();
 
@@ -69,9 +64,6 @@ class Updater {
 
       onProgress(const UpdateProgress(UpdateStage.installing));
       final installedPath = await _install(bundle.path);
-      if (installedPath == null) {
-        throw const UpdateFailure('已取消安装。');
-      }
 
       // Never returns if the relaunch actually happens — the process quits
       // from inside this call. If it does return, the user cancelled the
@@ -147,18 +139,12 @@ class Updater {
     return null;
   }
 
-  /// Prompts for the folder to install into (defaulting to /Applications),
-  /// then replaces any existing bundle of the same name there. Returns the
-  /// installed path, or null if the user cancelled the picker.
-  Future<String?> _install(String bundlePath) async {
+  /// Replaces any existing `/Applications/Typen.app` with the verified
+  /// bundle. Returns the installed path.
+  Future<String> _install(String bundlePath) async {
     final name = bundlePath.split('/').last;
-    final dir = await getDirectoryPath(
-      initialDirectory: '/Applications',
-      confirmButtonText: '选择此文件夹以安装更新',
-    );
-    if (dir == null) return null;
+    final dest = '/Applications/$name';
 
-    final dest = '$dir/$name';
     if (await Directory(dest).exists()) {
       await Directory(dest).delete(recursive: true);
     } else if (await File(dest).exists()) {
@@ -178,6 +164,15 @@ class Updater {
       }
       await Directory(bundlePath).delete(recursive: true);
     }
+
+    // The temp dir this bundle was extracted into is quarantined (it came
+    // from a download), and that flag survives both rename() and ditto.
+    // A quarantined app at a "real" path makes macOS App Translocation
+    // launch it from a throwaway read-only copy instead, which fails to
+    // spawn — so the app would install fine and then refuse to open. Strip
+    // it before handing back the path.
+    await Process.run('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', dest]);
+
     return dest;
   }
 }
