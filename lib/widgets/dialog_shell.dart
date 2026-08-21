@@ -146,10 +146,6 @@ class _DialogButton<T> extends StatelessWidget {
   const _DialogButton({required this.action});
   final DialogAction<T> action;
 
-  static final _shape =
-      RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusControl));
-  static const _padding = EdgeInsets.symmetric(horizontal: 16);
-  static const _minSize = Size(0, kControlHeight);
   static const _primaryText = TextStyle(fontSize: 13, fontWeight: FontWeight.w600);
   static const _plainText = TextStyle(fontSize: 13, fontWeight: FontWeight.w500);
 
@@ -160,62 +156,54 @@ class _DialogButton<T> extends StatelessWidget {
 
     return switch (action.kind) {
       DialogActionKind.primary => FilledButton(
-          onPressed: onTap,
-          style: FilledButton.styleFrom(
+        onPressed: onTap,
+        style: appButtonStyle(
+          FilledButton.styleFrom(
             backgroundColor: p.accent,
             foregroundColor: p.onAccent,
-            shape: _shape,
-            padding: _padding,
-            minimumSize: _minSize,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             textStyle: _primaryText,
           ),
-          child: Text(action.label),
         ),
+        child: Text(action.label),
+      ),
       // Filled, not outlined: buttons in this app carry their weight with
       // colour alone, and hover/press deepen that fill (see buildAppTheme's
       // overlay colours) rather than lighting up a border.
       DialogActionKind.secondary => FilledButton(
-          onPressed: onTap,
-          style: FilledButton.styleFrom(
+        onPressed: onTap,
+        style: appButtonStyle(
+          FilledButton.styleFrom(
             foregroundColor: p.textPrimary,
             backgroundColor: p.surface2,
             // One step up the surface ramp — reads in both palettes, unlike
             // the translucent white the accent-filled primary can use.
             overlayColor: p.surface3,
             elevation: 0,
-            shape: _shape,
-            padding: _padding,
-            minimumSize: _minSize,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             textStyle: _plainText,
           ),
-          child: Text(action.label),
         ),
+        child: Text(action.label),
+      ),
       DialogActionKind.destructive => TextButton(
-          onPressed: onTap,
-          style: TextButton.styleFrom(
+        onPressed: onTap,
+        style: appButtonStyle(
+          TextButton.styleFrom(
             foregroundColor: p.destructive,
-            shape: _shape,
-            padding: _padding,
-            minimumSize: _minSize,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             textStyle: _plainText,
           ),
-          child: Text(action.label),
         ),
+        child: Text(action.label),
+      ),
       DialogActionKind.plain => TextButton(
-          onPressed: onTap,
-          style: TextButton.styleFrom(
+        onPressed: onTap,
+        style: appButtonStyle(
+          TextButton.styleFrom(
             foregroundColor: p.textMuted,
-            shape: _shape,
-            padding: _padding,
-            minimumSize: _minSize,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             textStyle: _plainText,
           ),
-          child: Text(action.label),
         ),
+        child: Text(action.label),
+      ),
     };
   }
 }

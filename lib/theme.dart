@@ -128,9 +128,28 @@ const Cubic kAppEase = Cubic(0.22, 1, 0.36, 1);
 const double kRadiusControl = 8;
 const double kRadiusSurface = 14;
 
-/// Every button, chip and field in the app is this tall. One number, so a
-/// row of controls never reads as a jumble of slightly different sizes.
+/// Shared geometry for every compact button, chip and field in the editor and
+/// Preferences. Text buttons keep content-driven widths; icon buttons are
+/// square, and every control uses the same height and horizontal padding.
 const double kControlHeight = 28;
+const double kIconControlWidth = kControlHeight;
+const EdgeInsets kControlPadding = EdgeInsets.symmetric(horizontal: 12);
+
+/// Applies the app's shared compact button geometry before layering on the
+/// button's semantic colours. Keeping this here prevents Material's 48px
+/// default tap target or one-off padding from making adjacent controls jump in
+/// size.
+ButtonStyle appButtonStyle([ButtonStyle? appearance]) => ButtonStyle(
+  minimumSize: const WidgetStatePropertyAll(Size(0, kControlHeight)),
+  maximumSize: const WidgetStatePropertyAll(
+    Size(double.infinity, kControlHeight),
+  ),
+  padding: const WidgetStatePropertyAll(kControlPadding),
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  shape: WidgetStatePropertyAll(
+    RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusControl)),
+  ),
+).merge(appearance);
 
 ThemeData buildAppTheme(AppPalette p) {
   // No ripple anywhere — a static hover/press fill instead, same idea as
@@ -140,14 +159,16 @@ ThemeData buildAppTheme(AppPalette p) {
   // (kRadiusControl's accent blue) — painting the same opaque surface tint
   // over it would just replace that colour with grey, so it gets a
   // translucent wash instead, letting the base colour show through.
-  ButtonStyle noRipple(WidgetStateProperty<Color?> overlay) => ButtonStyle(
-        splashFactory: NoSplash.splashFactory,
-        overlayColor: overlay,
-        // A flat colour swap, not a fade — the default cross-fade between
-        // hover states is what read as flicker/blinking near a rounded
-        // corner's hit-test edge.
-        animationDuration: Duration.zero,
-      );
+  ButtonStyle noRipple(WidgetStateProperty<Color?> overlay) => appButtonStyle(
+    ButtonStyle(
+      splashFactory: NoSplash.splashFactory,
+      overlayColor: overlay,
+      // A flat colour swap, not a fade — the default cross-fade between
+      // hover states is what read as flicker/blinking near a rounded
+      // corner's hit-test edge.
+      animationDuration: Duration.zero,
+    ),
+  );
   final surfaceOverlay = WidgetStateProperty.resolveWith<Color?>((states) {
     if (states.contains(WidgetState.pressed)) return p.surface3;
     if (states.contains(WidgetState.hovered)) return p.surface2;

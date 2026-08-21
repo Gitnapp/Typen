@@ -80,7 +80,7 @@ class _ChipState extends State<_Chip> {
         child: Container(
           height: kControlHeight,
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: kControlPadding,
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(kRadiusControl),

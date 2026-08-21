@@ -194,7 +194,8 @@ class _SidebarItemState extends State<_SidebarItem> {
           // row changing colour twice rather than once. Hover should be one
           // instant swap.
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+            height: kControlHeight,
+            padding: kControlPadding,
             decoration: BoxDecoration(
               color: background,
               borderRadius: BorderRadius.circular(kRadiusControl),
@@ -530,21 +531,16 @@ class _ShortcutsPageState extends State<_ShortcutsPage> {
                     onPressed: widget.settings.hasShortcutOverrides
                         ? _resetAll
                         : null,
-                    style: FilledButton.styleFrom(
-                      foregroundColor: p.textPrimary,
-                      backgroundColor: p.surface2,
-                      overlayColor: p.surface3,
-                      disabledBackgroundColor: p.surface2,
-                      disabledForegroundColor: p.textMuted,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(kRadiusControl),
+                    style: appButtonStyle(
+                      FilledButton.styleFrom(
+                        foregroundColor: p.textPrimary,
+                        backgroundColor: p.surface2,
+                        overlayColor: p.surface3,
+                        disabledBackgroundColor: p.surface2,
+                        disabledForegroundColor: p.textMuted,
+                        elevation: 0,
+                        textStyle: const TextStyle(fontSize: 12.5),
                       ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 9,
-                      ),
-                      textStyle: const TextStyle(fontSize: 12.5),
                     ),
                     child: const Text('还原默认'),
                   ),
@@ -706,7 +702,7 @@ class _ShortcutFieldState extends State<_ShortcutField> {
                 width: 118,
                 height: kControlHeight,
                 alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                padding: kControlPadding,
                 decoration: BoxDecoration(
                   color: background,
                   borderRadius: BorderRadius.circular(kRadiusControl),
@@ -885,28 +881,21 @@ class _AboutPageState extends State<_AboutPage> {
                     // A filled button like every other control in this
                     // window, sized explicitly so the row height cannot
                     // stretch it into a slab.
-                    SizedBox(
-                      height: kControlHeight,
-                      child: FilledButton(
-                        onPressed: _checking ? null : runCheck,
-                        style: FilledButton.styleFrom(
+                    FilledButton(
+                      onPressed: _checking ? null : runCheck,
+                      style: appButtonStyle(
+                        FilledButton.styleFrom(
                           foregroundColor: p.textPrimary,
                           backgroundColor: p.surface2,
                           overlayColor: p.surface3,
                           disabledBackgroundColor: p.surface2,
                           disabledForegroundColor: p.textMuted,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(kRadiusControl),
-                          ),
                         ),
-                        child: Text(
-                          _checking ? '检查中' : '检查更新',
-                          style: const TextStyle(fontSize: 12),
-                        ),
+                      ),
+                      child: Text(
+                        _checking ? '检查中' : '检查更新',
+                        style: const TextStyle(fontSize: 12),
                       ),
                     ),
                 ],

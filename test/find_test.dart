@@ -1,5 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:typen/find.dart';
+import 'package:typen/theme.dart';
+import 'package:typen/widgets/find_bar.dart';
 
 void main() {
   const text = 'The cat sat on the mat.\nThe CAT came back.\n';
@@ -81,5 +84,61 @@ void main() {
     find.update(text, query: '');
     expect(find.matches, isEmpty);
     expect(find.current, -1);
+  });
+
+  testWidgets('find toolbar buttons use the shared compact geometry',
+      (tester) async {
+    final controller = FindController();
+    final query = TextEditingController();
+    final replacement = TextEditingController();
+    final queryFocus = FocusNode();
+    addTearDown(controller.dispose);
+    addTearDown(query.dispose);
+    addTearDown(replacement.dispose);
+    addTearDown(queryFocus.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(AppPalette.light),
+        home: Material(
+          child: FindBar(
+            controller: controller,
+            queryFocus: queryFocus,
+            queryController: query,
+            replaceController: replacement,
+            showReplace: true,
+            onQueryChanged: (_) {},
+            onToggleOption: ({caseSensitive, useRegex}) {},
+            onStep: (_) {},
+            onReplace: () {},
+            onReplaceAll: () {},
+            onToggleReplace: () {},
+            onClose: () {},
+          ),
+        ),
+      ),
+    );
+
+    for (final tooltip in [
+      '替换',
+      '区分大小写',
+      '正则表达式',
+      '上一个（⇧⌘G）',
+      '下一个（⌘G）',
+      '关闭（esc）',
+    ]) {
+      expect(
+        tester.getSize(find.byTooltip(tooltip)),
+        const Size(kIconControlWidth, kControlHeight),
+      );
+    }
+
+    final replaceAll = find
+        .ancestor(
+          of: find.text('全部替换'),
+          matching: find.byType(GestureDetector),
+        )
+        .first;
+    expect(tester.getSize(replaceAll).height, kControlHeight);
   });
 }

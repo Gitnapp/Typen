@@ -195,7 +195,7 @@ class _Field extends StatelessWidget {
           ),
         },
         child: Container(
-          height: 26,
+          height: kControlHeight,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: p.surface0,
@@ -257,10 +257,9 @@ class _IconToggle extends StatelessWidget {
         child: GestureDetector(
           onTap: onTap,
           child: Container(
-            width: 26,
-            height: 24,
+            width: kIconControlWidth,
+            height: kControlHeight,
             alignment: Alignment.center,
-            margin: const EdgeInsets.symmetric(horizontal: 1),
             decoration: BoxDecoration(
               color: active ? p.surface3 : Colors.transparent,
               borderRadius: BorderRadius.circular(kRadiusControl),
@@ -299,8 +298,8 @@ class _TextButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          height: 26,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          height: kControlHeight,
+          padding: kControlPadding,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: p.surface2,

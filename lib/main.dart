@@ -70,7 +70,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
   late final MarkdownHighlightingController _controller;
   final _undo = UndoHistoryController();
   final _editorFocus = FocusNode(debugLabel: 'editor');
-  final _sourceScroll = ScrollController();
+  late final SourceScrollController _sourceScroll;
   final _previewScroll = ScrollController();
   final _previewFocus = FocusNode(debugLabel: 'preview');
 
@@ -107,6 +107,9 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _sourceScroll = SourceScrollController(
+      trailingExtent: () => widget.stores.settings.fontSize * 1.6,
+    );
     _controller = MarkdownHighlightingController(
       config: HighlightConfig(
         palette: AppPalette.dark,
@@ -1168,10 +1171,9 @@ class _ModePill extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
             curve: kAppEase,
-            // Tight to the two characters it holds: this pill sits in the
-            // title strip next to the filename, so it reads as chrome only
-            // while it stays small.
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            height: kControlHeight,
+            padding: kControlPadding,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: isPreview ? p.surface3 : p.surface2,
               borderRadius: BorderRadius.circular(kRadiusControl),

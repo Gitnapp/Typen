@@ -2,6 +2,33 @@ import Cocoa
 import FlutterMacOS
 import Security
 
+/// A lightweight reservation for an Editor Window whose Flutter engine is
+/// queued for the next main-runloop turn. Launch Services can deliver files
+/// during that gap, so the reservation must participate in empty-window reuse
+/// and duplicate-path detection just like a fully constructed Window.
+private final class PendingEditorWindow {
+  private(set) var paths: [String]
+
+  init(paths: [String] = []) {
+    self.paths = paths
+  }
+
+  var isEmpty: Bool { paths.isEmpty }
+
+  func deliver(path: String) {
+    paths.append(path)
+  }
+
+  func holds(_ candidate: String) -> Bool {
+    let wanted = Self.standardized(candidate)
+    return paths.contains { Self.standardized($0) == wanted }
+  }
+
+  private static func standardized(_ path: String) -> String {
+    URL(fileURLWithPath: path).standardizedFileURL.path
+  }
+}
+
 @main
 class AppDelegate: FlutterAppDelegate {
   /// The window registry, in creation order. Each `EditorWindow` carries its
@@ -9,6 +36,10 @@ class AppDelegate: FlutterAppDelegate {
   /// reference to them and the single source of truth for the Window menu,
   /// duplicate-path detection and the quit sequence.
   private var windows: [EditorWindow] = []
+  /// `EditorWindow.init` is deferred because it synchronously boots a Flutter
+  /// engine. Reserve each Window before dispatching that work so launch/file
+  /// open events see the Window that is already on its way.
+  private var pendingWindows: [PendingEditorWindow] = []
   private var nextWindowID = 1
 
   /// The Preferences window, if one is open. A singleton kept outside
@@ -37,7 +68,9 @@ class AppDelegate: FlutterAppDelegate {
     super.applicationWillFinishLaunching(notification)
     observeReactivation()
     DispatchQueue.main.async {
-      if self.windows.isEmpty { self.newWindow() }
+      if self.windows.isEmpty && self.pendingWindows.isEmpty {
+        self.newWindow()
+      }
     }
   }
 
@@ -55,7 +88,7 @@ class AppDelegate: FlutterAppDelegate {
     _ sender: NSApplication,
     hasVisibleWindows flag: Bool
   ) -> Bool {
-    if windows.isEmpty { newWindow() }
+    if windows.isEmpty && pendingWindows.isEmpty { newWindow() }
     return true
   }
 
@@ -106,8 +139,8 @@ class AppDelegate: FlutterAppDelegate {
 
   // ─── Windows ─────────────────────────────────────────────────────────────
 
-  /// Always a brand-new window with a blank Untitled Document. `pendingPaths`
-  /// seeds the queue its Dart side drains on boot.
+  /// Always a brand-new Window, blank unless `pendingPaths` seeds the file
+  /// queue its Dart side drains on boot.
   ///
   /// Booting a Flutter engine — what `EditorWindow.init` does before the
   /// window even exists — is synchronous and runs on the main thread; with
@@ -117,15 +150,18 @@ class AppDelegate: FlutterAppDelegate {
   /// let the event that triggered this (⌘N, a menu click) finish being
   /// handled first, rather than that event's own dispatch being what blocks.
   func newWindow(pendingPaths: [String] = []) {
+    let pending = PendingEditorWindow(paths: pendingPaths)
+    pendingWindows.append(pending)
     DispatchQueue.main.async {
       let window = EditorWindow(
         id: self.nextWindowID,
         app: self,
-        pendingPaths: pendingPaths,
+        pendingPaths: pending.paths,
         cascadingFrom: self.windows.last
       )
       self.nextWindowID += 1
       self.windows.append(window)
+      self.pendingWindows.removeAll { $0 === pending }
       window.makeKeyAndOrderFront(nil)
       self.windowsChanged()
     }
@@ -139,10 +175,21 @@ class AppDelegate: FlutterAppDelegate {
       existing.makeKeyAndOrderFront(nil)
       return
     }
+    // A Window whose engine has not booted yet still owns its queued path.
+    // Without this check, two open events for the same file can each enqueue
+    // a Window before either one reaches the registry above.
+    if pendingWindows.contains(where: { $0.holds(path) }) { return }
     // An untouched window is one the user is offering us.
     if let empty = frontmostWindow, empty.isEmpty {
       empty.deliver(path: path)
       empty.makeKeyAndOrderFront(nil)
+      return
+    }
+    // The launch fallback may already have reserved an Untitled Window but
+    // not booted it yet. Turn that reservation into the requested file Window
+    // instead of enqueueing a second Window alongside it.
+    if let empty = pendingWindows.last(where: \.isEmpty) {
+      empty.deliver(path: path)
       return
     }
     newWindow(pendingPaths: [path])

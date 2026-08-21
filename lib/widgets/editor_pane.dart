@@ -13,6 +13,53 @@ import 'markdown_highlighter.dart';
 
 enum EditorMode { source, preview }
 
+/// A source editor scroll position with one extra line after Flutter's own
+/// editable-text extent. The buffer stays byte-faithful; the space is viewport
+/// geometry rather than a synthetic newline in [TextEditingController.text].
+class SourceScrollController extends ScrollController {
+  SourceScrollController({required this.trailingExtent});
+
+  final ValueGetter<double> trailingExtent;
+
+  @override
+  ScrollPosition createScrollPosition(
+    ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition? oldPosition,
+  ) => _SourceScrollPosition(
+    physics: physics,
+    context: context,
+    trailingExtent: trailingExtent,
+    initialPixels: initialScrollOffset,
+    keepScrollOffset: keepScrollOffset,
+    oldPosition: oldPosition,
+    debugLabel: debugLabel,
+  );
+}
+
+class _SourceScrollPosition extends ScrollPositionWithSingleContext {
+  _SourceScrollPosition({
+    required super.physics,
+    required super.context,
+    required this.trailingExtent,
+    super.initialPixels,
+    super.keepScrollOffset,
+    super.oldPosition,
+    super.debugLabel,
+  });
+
+  final ValueGetter<double> trailingExtent;
+
+  @override
+  bool applyContentDimensions(double minScrollExtent, double maxScrollExtent) {
+    final trailing = math.max(0.0, trailingExtent());
+    return super.applyContentDimensions(
+      minScrollExtent,
+      maxScrollExtent + trailing,
+    );
+  }
+}
+
 /// The editable buffer is plain Markdown text and nothing else. [preview] is
 /// strictly a renderer — it has no path back to the buffer or to disk, which
 /// is what makes "the file you opened is the file you save" structurally true
@@ -42,10 +89,13 @@ class EditorPane extends StatelessWidget {
   final String? documentDir;
 
   static const monoFamily = 'Menlo';
+  static const sourceBottomSpaceKey = ValueKey('source-bottom-space');
 
   /// Smallest gap between the text and the window edge, used once the window
   /// is too narrow to reach the configured column width.
   static const _minSideInset = 40.0;
+
+  double get _sourceLineExtent => settings.fontSize * 1.6;
 
   @override
   Widget build(BuildContext context) {
@@ -123,55 +173,104 @@ class EditorPane extends StatelessWidget {
         // Rebuilds just the field when the selection moves, so the caret
         // picks up `headingScaleAt` the moment it lands on a different line
         // — a plain build-time read would only refresh on unrelated rebuilds.
-        child: ListenableBuilder(
-          listenable: controller,
-          builder: (context, _) => TextField(
-            controller: controller,
-            undoController: undoController,
-            focusNode: focusNode,
-            scrollController: scrollController,
-            // Ambient physics on macOS is BouncingScrollPhysics, which lets
-            // `pixels` legitimately sit outside [min, max] for a few frames
-            // during rubber-band/spring-back at the document's ends. Scrollbar
-            // recomputes its thumb's length every frame with no smoothing, and
-            // its overscroll branch shrinks/grows the thumb on each of those
-            // frames — that reads as the thumb flickering. Clamping physics
-            // keeps `pixels` inside [min, max] at all times, so the thumb stays
-            // a stable function of viewportDimension/maxScrollExtent.
-            scrollPhysics: const ClampingScrollPhysics(),
-            scrollPadding: const EdgeInsets.symmetric(vertical: 80),
-            maxLines: null,
-            expands: true,
-            autofocus: true,
-            cursorColor: palette.gold,
-            cursorWidth: 2,
-            // Flutter sizes the caret to the *paragraph* line height by
-            // default, not the glyph — with height: 1.6 below that reads as
-            // comically tall. Pin it to the font's own metrics instead, scaled
-            // up on a heading line so the caret is never shorter than the
-            // (enlarged) text it's sitting next to.
-            cursorHeight: settings.fontSize *
-                controller.headingScaleAt(controller.selection.baseOffset) *
-                1.2,
-            // The controller supplies every span's style; this only sets the
-            // metrics the field uses for an empty buffer and the caret.
-            style: TextStyle(
-              color: palette.textPrimary,
-              fontFamily: settings.proportionalEditorFont ? null : monoFamily,
-              fontSize: settings.fontSize,
-              height: 1.6,
-              leadingDistribution: TextLeadingDistribution.even,
+        child: Stack(
+          children: [
+            // Rebuilds just the field when the selection moves, so the caret
+            // picks up `headingScaleAt` the moment it lands on a different line.
+            ListenableBuilder(
+              listenable: controller,
+              builder: (context, _) => TextField(
+                controller: controller,
+                undoController: undoController,
+                focusNode: focusNode,
+                scrollController: scrollController,
+                // Ambient physics on macOS is BouncingScrollPhysics, which lets
+                // `pixels` sit outside [min, max] and makes the thumb flicker.
+                scrollPhysics: const ClampingScrollPhysics(),
+                scrollPadding: const EdgeInsets.symmetric(vertical: 80),
+                maxLines: null,
+                expands: true,
+                autofocus: true,
+                cursorColor: palette.gold,
+                cursorWidth: 2,
+                cursorHeight:
+                    settings.fontSize *
+                    controller.headingScaleAt(controller.selection.baseOffset) *
+                    1.2,
+                // A non-forced strut supplies the first rich-text line with
+                // the same baseline/leading contract as every later line. H1
+                // spans may still grow beyond it; they are no longer clipped
+                // against the smaller root TextField metrics at y=0.
+                strutStyle: StrutStyle(
+                  fontFamily: settings.proportionalEditorFont
+                      ? null
+                      : monoFamily,
+                  fontSize: settings.fontSize,
+                  height: 1.6,
+                  leadingDistribution: TextLeadingDistribution.even,
+                ),
+                // The controller supplies every span's style; this only sets
+                // the metrics the field uses for an empty buffer and caret.
+                style: TextStyle(
+                  color: palette.textPrimary,
+                  fontFamily: settings.proportionalEditorFont
+                      ? null
+                      : monoFamily,
+                  fontSize: settings.fontSize,
+                  height: 1.6,
+                  leadingDistribution: TextLeadingDistribution.even,
+                ),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.fromLTRB(side, 24, side, 0),
+                ),
+              ),
             ),
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              // Flush against the title bar reads as clipped, not minimal —
-              // a small top gap only, bottom stays flush per the scrollbar fix.
-              contentPadding: EdgeInsets.fromLTRB(side, 24, side, 0),
+            ListenableBuilder(
+              listenable: scrollController,
+              builder: (context, _) {
+                final atBottom =
+                    scrollController.hasClients &&
+                    scrollController.position.hasContentDimensions &&
+                    scrollController.position.extentAfter <= 0.5;
+                if (!atBottom) return const SizedBox.shrink();
+                return Positioned(
+                  left: side,
+                  right: side,
+                  bottom: 0,
+                  height: _sourceLineExtent,
+                  child: Semantics(
+                    button: true,
+                    label: '在文末新起一行',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.text,
+                      child: GestureDetector(
+                        key: sourceBottomSpaceKey,
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _appendLineFromBottomSpace,
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
-          ),
+          ],
         ),
       ),
     );
+  }
+
+  void _appendLineFromBottomSpace() {
+    final text = '${controller.text}\n';
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    focusNode.requestFocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!scrollController.hasClients) return;
+      scrollController.jumpTo(scrollController.position.maxScrollExtent);
+    });
   }
 
   /// YAML front matter is metadata, not prose — Markdown renderers do not

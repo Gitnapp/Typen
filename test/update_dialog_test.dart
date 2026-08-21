@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:typen/theme.dart';
 import 'package:typen/update_checker.dart';
 import 'package:typen/widgets/update_dialog.dart';
 
@@ -34,6 +35,15 @@ void main() {
     expect(find.text('跳过此版本'), findsOneWidget);
     expect(find.text('以后再说'), findsOneWidget);
     expect(find.text('立即更新'), findsOneWidget);
+    for (final label in ['跳过此版本', '以后再说', '立即更新']) {
+      final button = find.ancestor(
+        of: find.text(label),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is FilledButton || widget is TextButton,
+        ),
+      );
+      expect(tester.getSize(button).height, kControlHeight);
+    }
   });
 
   testWidgets('"跳过此版本" resolves with UpdateDialogAction.skip and closes',

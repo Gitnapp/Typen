@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:typen/main.dart';
 import 'package:typen/store.dart';
+import 'package:typen/theme.dart';
+import 'package:typen/widgets/editor_pane.dart';
 
 const _channel = 'typen/native';
 const _codec = StandardMethodCodec();
@@ -282,6 +285,71 @@ void main() {
     final restoredFraction =
         sourceScroll.offset / sourceScroll.position.maxScrollExtent;
     expect(restoredFraction, closeTo(previewFraction, 0.05));
+  }, variant: onMacOS);
+
+  testWidgets('the first source H1 gets the same full line box as the next H1',
+      (tester) async {
+    const content = '# First H1\n# Second H1\nbody\n';
+    final file = seed(content);
+    await boot(tester);
+    await openInApp(tester, file);
+
+    final editable = tester.renderObject<RenderEditable>(
+      find.byType(EditableText).first,
+    );
+    Rect bounds(int start, int end) => editable
+        .getBoxesForSelection(
+          TextSelection(baseOffset: start, extentOffset: end),
+        )
+        .map((box) => box.toRect())
+        .reduce((a, b) => a.expandToInclude(b));
+
+    final first = bounds(0, content.indexOf('\n'));
+    final secondStart = content.indexOf('\n') + 1;
+    final second = bounds(secondStart, content.indexOf('\n', secondStart));
+
+    expect(first.top, greaterThanOrEqualTo(0));
+    expect(first.height, greaterThan(30),
+        reason: 'the first 24px H1 glyph needs a complete line box');
+    expect(first.height, closeTo(second.height, 3));
+  }, variant: onMacOS);
+
+  testWidgets('the extra bottom line is scrollable and appends on click',
+      (tester) async {
+    final original = List.generate(80, (i) => 'line $i').join('\n');
+    final file = seed(original);
+    final stores = await boot(tester);
+    await openInApp(tester, file);
+
+    final field = tester.widget<TextField>(editorField);
+    final sourceScroll = field.scrollController!;
+    sourceScroll.jumpTo(sourceScroll.position.maxScrollExtent);
+    await tester.pump();
+
+    final bottomSpace = find.byKey(EditorPane.sourceBottomSpaceKey);
+    expect(bottomSpace, findsOneWidget);
+    expect(
+      tester.getSize(bottomSpace).height,
+      stores.settings.fontSize * 1.6,
+    );
+
+    await tester.tap(bottomSpace);
+    await tester.pump();
+    await tester.pump();
+
+    expect(bufferOf(tester), '$original\n');
+    expect(field.controller!.selection.baseOffset, original.length + 1);
+    expect(sourceScroll.offset, sourceScroll.position.maxScrollExtent);
+  }, variant: onMacOS);
+
+  testWidgets('editor toolbar buttons use the shared compact height',
+      (tester) async {
+    await boot(tester);
+
+    expect(
+      tester.getSize(find.byTooltip('切换模式（⌘/）')).height,
+      kControlHeight,
+    );
   }, variant: onMacOS);
 
   testWidgets('an edit made by another program is not silently overwritten',
