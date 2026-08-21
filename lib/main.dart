@@ -1177,7 +1177,9 @@ class _ModePill extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             curve: kAppEase,
             height: kControlHeight,
-            padding: kControlPadding,
+            // Tighter than kControlPadding: two CJK characters at 10.5pt
+            // look lost in the 12px side gutter every other control uses.
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: isPreview ? p.surface3 : p.surface2,
