@@ -342,6 +342,27 @@ void main() {
     expect(bufferOf(tester), '$original\n');
     expect(field.controller!.selection.baseOffset, original.length + 1);
     expect(sourceScroll.offset, sourceScroll.position.maxScrollExtent);
+
+    // The buffer now ends on a blank line — that line already is the room
+    // to click into, so the synthetic space must not still be reserved.
+    expect(find.byKey(EditorPane.sourceBottomSpaceKey), findsNothing);
+  }, variant: onMacOS);
+
+  testWidgets(
+      'a document that already ends on a blank line gets no extra click space',
+      (tester) async {
+    final original = '${List.generate(80, (i) => 'line $i').join('\n')}\n';
+    final file = seed(original);
+    await boot(tester);
+    await openInApp(tester, file);
+
+    final field = tester.widget<TextField>(editorField);
+    final sourceScroll = field.scrollController!;
+    sourceScroll.jumpTo(sourceScroll.position.maxScrollExtent);
+    await tester.pump();
+
+    expect(find.byKey(EditorPane.sourceBottomSpaceKey), findsNothing);
+    expect(bufferOf(tester), original, reason: 'no line was silently added');
   }, variant: onMacOS);
 
   testWidgets('editor toolbar buttons use the shared compact height',

@@ -108,7 +108,12 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _sourceScroll = SourceScrollController(
-      trailingExtent: () => widget.stores.settings.fontSize * 1.6,
+      // No reserved space once the buffer already ends on a blank line —
+      // that line already is the room to click into, so reserving more on
+      // top of it would just be a second blank-looking row.
+      trailingExtent: () => hasTrailingBlankLine(_controller.text)
+          ? 0.0
+          : widget.stores.settings.fontSize * 1.6,
     );
     _controller = MarkdownHighlightingController(
       config: HighlightConfig(

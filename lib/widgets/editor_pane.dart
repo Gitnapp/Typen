@@ -13,6 +13,11 @@ import 'markdown_highlighter.dart';
 
 enum EditorMode { source, preview }
 
+/// Whether [text] already ends on a blank line — the buffer either is empty
+/// or its last byte is the newline that starts that blank line. An empty
+/// document counts too: there is nothing to append a line after.
+bool hasTrailingBlankLine(String text) => text.isEmpty || text.endsWith('\n');
+
 /// A source editor scroll position with one extra line after Flutter's own
 /// editable-text extent. The buffer stays byte-faithful; the space is viewport
 /// geometry rather than a synthetic newline in [TextEditingController.text].
@@ -238,8 +243,14 @@ class EditorPane extends StatelessWidget {
               ),
             ),
             ListenableBuilder(
-              listenable: scrollController,
+              // The buffer already ending on a blank line makes this space
+              // redundant — that line *is* the room to click into — so this
+              // has to redraw on every keystroke, not just every scroll.
+              listenable: Listenable.merge([scrollController, controller]),
               builder: (context, _) {
+                if (hasTrailingBlankLine(controller.text)) {
+                  return const SizedBox.shrink();
+                }
                 final atBottom =
                     scrollController.hasClients &&
                     scrollController.position.hasContentDimensions &&
