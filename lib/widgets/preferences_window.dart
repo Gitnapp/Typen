@@ -350,6 +350,56 @@ class _SectionRow extends StatelessWidget {
   }
 }
 
+/// A filled action pill ("还原默认", "检查更新…") built the same way as every
+/// other compact control in this window — hand-rolled `Container`, not a
+/// Material `FilledButton`. Material's own size resolution (theme default
+/// style, `visualDensity`, its internal `styleFrom` minimums) can still leave
+/// a `FilledButton` a few px short of the `appButtonStyle` height it was
+/// given; a plain `Container` has no such machinery to fight, so it is the
+/// one construction guaranteed to land on exactly [kControlHeight].
+class _FilledPillButton extends StatefulWidget {
+  const _FilledPillButton({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  State<_FilledPillButton> createState() => _FilledPillButtonState();
+}
+
+class _FilledPillButtonState extends State<_FilledPillButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final enabled = widget.onTap != null;
+    return MouseRegion(
+      cursor: SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          height: kControlHeight,
+          padding: kControlPadding,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: enabled && _hovered ? p.surface3 : p.surface2,
+            borderRadius: BorderRadius.circular(kRadiusControl),
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 12.5,
+              color: enabled ? p.textPrimary : p.textMuted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── 外观 ────────────────────────────────────────────────────────────────────
 
 class _AppearancePage extends StatefulWidget {
@@ -527,22 +577,11 @@ class _ShortcutsPageState extends State<_ShortcutsPage> {
                       style: TextStyle(fontSize: 12.5, color: p.textSecondary),
                     ),
                   ),
-                  FilledButton(
-                    onPressed: widget.settings.hasShortcutOverrides
+                  _FilledPillButton(
+                    label: '还原默认',
+                    onTap: widget.settings.hasShortcutOverrides
                         ? _resetAll
                         : null,
-                    style: appButtonStyle(
-                      FilledButton.styleFrom(
-                        foregroundColor: p.textPrimary,
-                        backgroundColor: p.surface2,
-                        overlayColor: p.surface3,
-                        disabledBackgroundColor: p.surface2,
-                        disabledForegroundColor: p.textMuted,
-                        elevation: 0,
-                        textStyle: const TextStyle(fontSize: 12.5),
-                      ),
-                    ),
-                    child: const Text('还原默认'),
                   ),
                 ],
               ),
@@ -878,25 +917,9 @@ class _AboutPageState extends State<_AboutPage> {
                       style: TextStyle(color: p.textMuted, fontSize: 12),
                     )
                   else
-                    // A filled button like every other control in this
-                    // window, sized explicitly so the row height cannot
-                    // stretch it into a slab.
-                    FilledButton(
-                      onPressed: _checking ? null : runCheck,
-                      style: appButtonStyle(
-                        FilledButton.styleFrom(
-                          foregroundColor: p.textPrimary,
-                          backgroundColor: p.surface2,
-                          overlayColor: p.surface3,
-                          disabledBackgroundColor: p.surface2,
-                          disabledForegroundColor: p.textMuted,
-                          elevation: 0,
-                        ),
-                      ),
-                      child: Text(
-                        _checking ? '检查中' : '检查更新',
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                    _FilledPillButton(
+                      label: _checking ? '检查中' : '检查更新',
+                      onTap: _checking ? null : runCheck,
                     ),
                 ],
               ),

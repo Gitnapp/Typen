@@ -212,18 +212,16 @@ void main() {
       expect(tester.getSize(item).height, kControlHeight);
     }
 
+    Size buttonSizeOf(String label) => tester.getSize(find
+        .ancestor(of: find.text(label).first, matching: find.byType(GestureDetector))
+        .first);
+
     await tester.tap(find.text('快捷键').first);
     await tester.pumpAndSettle();
-    expect(
-      tester.getSize(find.widgetWithText(FilledButton, '还原默认')).height,
-      kControlHeight,
-    );
+    expect(buttonSizeOf('还原默认').height, kControlHeight);
 
     await tester.tap(find.text('关于').first);
     await tester.pumpAndSettle();
-    expect(
-      tester.getSize(find.widgetWithText(FilledButton, '检查更新')).height,
-      kControlHeight,
-    );
+    expect(buttonSizeOf('检查更新').height, kControlHeight);
   });
 }
