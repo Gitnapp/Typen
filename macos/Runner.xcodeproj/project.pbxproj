@@ -478,7 +478,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = dev.eric.properMdEditor.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/proper_md_editor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/proper_md_editor";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Typen.app/Contents/MacOS/Typen";
 			};
 			name = Debug;
 		};
@@ -493,7 +493,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = dev.eric.properMdEditor.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/proper_md_editor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/proper_md_editor";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Typen.app/Contents/MacOS/Typen";
 			};
 			name = Release;
 		};
@@ -508,7 +508,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = dev.eric.properMdEditor.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/proper_md_editor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/proper_md_editor";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Typen.app/Contents/MacOS/Typen";
 			};
 			name = Profile;
 		};

@@ -23,8 +23,9 @@ class WindowInfo {
 }
 
 /// Thin wrapper over this Window's platform channel — every Window runs its
-/// own engine and therefore its own channel instance, so every call below is
-/// scoped to the Window that makes it. Methods degrade to a no-op / null when
+/// own engine and therefore its own channel instance. Document operations are
+/// scoped to the caller; app-wide window commands resolve their target natively.
+/// Methods degrade to a no-op / null when
 /// the channel is absent (unit tests, non-macOS hosts) so callers never need to
 /// know whether they are running on a real app.
 class Native {
@@ -56,8 +57,8 @@ class Native {
   static Future<void> focusWindow(int id) =>
       _call<void>('focusWindow', {'id': id}).then((_) {});
 
-  /// Closes this Window the same way the red button does — routes through
-  /// the existing windowShouldClose / confirmClose flow, no separate path.
+  /// Closes the key Window through its windowShouldClose / confirmClose flow.
+  /// The app-wide menu may invoke this from a background Window's engine.
   static Future<void> closeWindow() =>
       _call<void>('closeWindow').then((_) {});
 

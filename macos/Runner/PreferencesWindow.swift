@@ -88,7 +88,7 @@ final class PreferencesWindow: NSWindow, NSWindowDelegate {
   private func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "closeWindow":
-      performClose(nil)
+      NSApp.keyWindow?.performClose(nil)
       result(nil)
 
     case "settingsChanged":
@@ -146,11 +146,8 @@ final class PreferencesWindow: NSWindow, NSWindowDelegate {
     channel.invokeMethod("checkUpdates", arguments: nil)
   }
 
-  /// ⌘W is bound only inside each Editor's own `PlatformMenuBar`, and the
-  /// menu bar belongs to whichever Editor engine rendered it last — this
-  /// window never touches it. Without this override, ⌘W here would silently
-  /// close that background Editor instead of the window the user is looking
-  /// at.
+  /// Preferences has no PlatformMenuBar. Keep native ⌘W available even
+  /// after the last Editor engine owning the shared menu has closed.
   override func performKeyEquivalent(with event: NSEvent) -> Bool {
     if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
        event.charactersIgnoringModifiers == "w" {

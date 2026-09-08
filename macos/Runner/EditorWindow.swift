@@ -203,7 +203,7 @@ final class EditorWindow: NSWindow, NSWindowDelegate {
 
   // ─── Dart -> Native ──────────────────────────────────────────────────────
 
-  private func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
+  func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
     let args = call.arguments as? [String: Any] ?? [:]
 
     switch call.method {
@@ -247,9 +247,9 @@ final class EditorWindow: NSWindow, NSWindowDelegate {
       result(nil)
 
     case "closeWindow":
-      // Same door as the red button: performClose still runs
-      // windowShouldClose, so the unsaved-changes confirm is unchanged.
-      performClose(nil)
+      // The app-wide menu can belong to a background Flutter engine.
+      // Close the key window, while preserving its unsaved-changes prompt.
+      NSApp.keyWindow?.performClose(nil)
       result(nil)
 
     // `openPath` and `focusWindow` take the argument map the other methods
