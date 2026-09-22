@@ -181,6 +181,12 @@ class MarkdownHighlightingController extends TextEditingController {
     final mono = base.copyWith(
       fontFamily: _config.monoFamily,
       fontSize: _config.fontSize * 0.94,
+      // Selection boxes size to fontSize × height, so shrinking the font
+      // without compensating the height makes inline-code spans paint a
+      // shorter band ("teeth") along a selected line. 1.6/0.94 keeps the
+      // run's box at exactly the common line height — and since the line
+      // height is the max over runs, layout is unchanged.
+      height: (base.height ?? 1.6) / 0.94,
     );
     final codeStyle = mono.copyWith(color: p.emerald);
     final metaStyle = mono.copyWith(color: p.textMuted);

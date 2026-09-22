@@ -13,7 +13,11 @@ dependencies:
 
   # Rendering. The editable buffer is plain text — these only render the
   # read-only preview. Nothing here is ever allowed to write to disk.
-  flutter_markdown_plus: ^1.0.7
+  # Vendored: stock SelectionArea paints glyph-tight selection boxes with no
+  # configuration seam; the vendored copy swaps the preview's text for a
+  # RenderParagraph that reports full-line-height selection boxes.
+  flutter_markdown_plus:
+    path: vendor/flutter_markdown_plus
   markdown: ^7.3.1
 
   # File I/O + recents
@@ -30,7 +34,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-
 flutter:
   uses-material-design: true
   assets:

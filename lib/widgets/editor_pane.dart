@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import 'package:path/path.dart' as p;
 import '../store.dart';
 import '../theme.dart';
 import 'markdown_highlighter.dart';
+import 'selection_highlight.dart';
 
 enum EditorMode { source, preview }
 
@@ -174,6 +176,24 @@ class EditorPane extends StatelessWidget {
   }
 
   Widget _sourceField(AppPalette palette, double side) {
+    final fieldStyle = TextStyle(
+      color: palette.textPrimary,
+      fontFamily: settings.proportionalEditorFont ? null : monoFamily,
+      fontSize: settings.fontSize,
+      height: 1.6,
+      leadingDistribution: TextLeadingDistribution.even,
+    );
+    // A non-forced strut supplies the first rich-text line with the same
+    // baseline/leading contract as every later line. H1 spans may still grow
+    // beyond it; they are no longer clipped against the smaller root TextField
+    // metrics at y=0.
+    final strut = StrutStyle(
+      fontFamily: settings.proportionalEditorFont ? null : monoFamily,
+      fontSize: settings.fontSize,
+      height: 1.6,
+      leadingDistribution: TextLeadingDistribution.even,
+    );
+    const contentTop = 24.0;
     // The field fills the pane edge to edge: the scrollbar then rides the
     // window edge with a thumb track exactly as tall as the viewport, and the
     // horizontal inset sits *inside* the field, where it moves the text
@@ -191,6 +211,23 @@ class EditorPane extends StatelessWidget {
         // — a plain build-time read would only refresh on unrelated rebuilds.
         child: Stack(
           children: [
+            // The gap-free selection highlight, painted under the text. The
+            // field's own boxes (BoxHeightStyle.max) stay on too — same
+            // colour, so the union is just the flat block.
+            ListenableBuilder(
+              listenable: controller,
+              builder: (context, _) => Padding(
+                padding: EdgeInsets.fromLTRB(side, contentTop, side, 0),
+                child: SourceSelectionHighlight(
+                  controller: controller,
+                  scrollController: scrollController,
+                  color: palette.selection,
+                  style: fieldStyle,
+                  strutStyle: strut,
+                  softWrap: settings.softWrap,
+                ),
+              ),
+            ),
             // Rebuilds just the field when the selection moves, so the caret
             // picks up `headingScaleAt` the moment it lands on a different line.
             ListenableBuilder(
@@ -213,32 +250,21 @@ class EditorPane extends StatelessWidget {
                     settings.fontSize *
                     controller.headingScaleAt(controller.selection.baseOffset) *
                     1.2,
-                // A non-forced strut supplies the first rich-text line with
-                // the same baseline/leading contract as every later line. H1
-                // spans may still grow beyond it; they are no longer clipped
-                // against the smaller root TextField metrics at y=0.
-                strutStyle: StrutStyle(
-                  fontFamily: settings.proportionalEditorFont
-                      ? null
-                      : monoFamily,
-                  fontSize: settings.fontSize,
-                  height: 1.6,
-                  leadingDistribution: TextLeadingDistribution.even,
-                ),
+                // Full-line-height selection boxes: the default
+                // includeLineSpacingMiddle neither fills nor aligns the line
+                // box here, so selected lines stripe with background gaps.
+                // max boxes tile seamlessly; width stays tight (glyph-hugging)
+                // while the overlay underneath paints the gap-free,
+                // full-row-width union.
+                selectionHeightStyle: ui.BoxHeightStyle.max,
+                selectionWidthStyle: ui.BoxWidthStyle.tight,
+                strutStyle: strut,
                 // The controller supplies every span's style; this only sets
                 // the metrics the field uses for an empty buffer and caret.
-                style: TextStyle(
-                  color: palette.textPrimary,
-                  fontFamily: settings.proportionalEditorFont
-                      ? null
-                      : monoFamily,
-                  fontSize: settings.fontSize,
-                  height: 1.6,
-                  leadingDistribution: TextLeadingDistribution.even,
-                ),
+                style: fieldStyle,
                 decoration: InputDecoration(
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.fromLTRB(side, 24, side, 0),
+                  contentPadding: EdgeInsets.fromLTRB(side, contentTop, side, 0),
                 ),
               ),
             ),
@@ -441,7 +467,9 @@ class EditorPane extends StatelessWidget {
         fontFamily: monoFamily,
         fontSize: size * 0.9,
         color: p.emerald,
-        backgroundColor: p.surface2,
+        // No chip background: span backgrounds paint *over* the selection
+        // highlight, so a selected line with inline code showed dark holes
+        // in an otherwise flat band. Code blocks keep their own decoration.
       ),
       codeblockPadding: const EdgeInsets.all(14),
       codeblockDecoration: BoxDecoration(

@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [2026-09-22] 选中效果平面化 + 整行高亮
+
+- 选中色改为不透明的柔和金色（深色 `#4B3D19` / 浅色 `#DFD4B5`，品牌金 #D4A93A 向底色沉降）：半透明色叠在不同底色上会显出深浅不一的"层次感"，不透明平面色不受底下内容影响。
+- 源码和预览的选区都换成整行高盒子（`BoxHeightStyle.max`）：相邻行的高亮无缝平铺成一整块，不再出现包住字形的条纹。预览侧由于 `SelectionArea` 的 tight 盒没有任何公开配置口（硬编码在 `RenderParagraph` 的选区绘制里），vendor 了 `flutter_markdown_plus` 到 `vendor/flutter_markdown_plus`，让预览文本使用报告整行高选区盒的 `RenderParagraph` 子类（`LineHeightParagraph`）。
+- 行内代码字号比正文小（0.94×/0.9×），按基线对齐的选区盒会在代码段上矮一截，形成"锯齿"。源码侧把等宽 span 的 `height` 补偿到 `1.6/0.94`（盒高 = fontSize × height，补偿后与正文行高精确相等，行布局不变）；预览侧在 `LineHeightParagraph` 里把同一行的盒子对齐到该行的并集。
+- 行间黑线：行高被像素取整（25.6→26.0）而选区盒不取整，相邻行间留下约 0.4px 的未绘制缝隙，在分数缩放屏幕上光栅化成发线。源码侧改为自绘选区（`lib/widgets/selection_highlight.dart`：镜像 TextPainter 算出选区盒后做行内并集对齐 + 上下膨胀 0.5px，叠在文字下层、与原生盒同色并集）；预览侧同样在并集后膨胀 0.5px。
+- 右缘阶梯：`BoxWidthStyle.max` 会把每行延伸到排版宽度，但其延伸凸头恰恰在最长的行上脱落，形成缺口；改成 tight 贴字又会留下锯齿状"缺角"。最终规则：选区完整吞掉的行（含行尾换行或文本结尾）统一延伸到内容列右缘，最后一行中途结束的保持贴字——两端同规则。注意 `computeLineMetrics` 的宽度不含行尾空格、且换行续行的宽度/基线会失真，不能用作钳制依据。
+- 预览行内代码/代码块的 span 自带底色会画在选区上层、啃出暗块；去掉 `code` 样式的 `backgroundColor`（代码块容器底色不受影响）。
+- 预览各块按内容收缩宽度（`size.width` 即文字宽），"延伸到段落宽"等于没延伸；改为延伸到 `constraints.maxWidth`（栏宽），代码块横向滚动容器约束无界、回退为贴合最长代码行。
+
 ## [2026-09-22] Linux 移植 + 应用图标
 
 ### Linux 版（`docs/adr/0002-linux-multi-window-via-processes.md`）

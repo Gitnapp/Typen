@@ -59,6 +59,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
 
   final Color destructive;
 
+  /// Text selection highlight. Opaque and flat on purpose: a translucent tint
+  /// bands over whatever sits under it and reads as layered "depth". The hue
+  /// is [gold] pulled towards the surface, so it stays the app's accent
+  /// without glowing.
   final Color selection;
   final Color findMatch;
   final Color findCurrent;
@@ -79,7 +83,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     coral: Color(0xFFF08A3E),
     emerald: Color(0xFF4A8A5C),
     destructive: Color(0xFFFF453A),
-    selection: Color(0x47D4A93A),
+    selection: Color(0xFF4B3D19),
     findMatch: Color(0x38D4A93A),
     findCurrent: Color(0x8CF08A3E),
   );
@@ -100,7 +104,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     coral: Color(0xFFC2621C),
     emerald: Color(0xFF2F6B41),
     destructive: Color(0xFFFF3B30),
-    selection: Color(0x479A7712),
+    selection: Color(0xFFDFD4B5),
     findMatch: Color(0x389A7712),
     findCurrent: Color(0x8CC2621C),
   );

@@ -309,13 +309,12 @@ void main() {
     final secondStart = content.indexOf('\n') + 1;
     final second = bounds(secondStart, content.indexOf('\n', secondStart));
 
-    expect(first.top, greaterThanOrEqualTo(0));
+    // Selection boxes use BoxHeightStyle.max, whose box can start a fraction
+    // of a pixel above the line top — so only the heights carry the clipping
+    // signal, not the top edge.
     expect(first.height, greaterThan(30),
         reason: 'the first 24px H1 glyph needs a complete line box');
-    // Strut only guarantees line 1 isn't clipped, not pixel parity with
-    // later lines — Skia's strut-vs-content line-height merge leaves a few
-    // px of slack that doesn't correspond to any visible glyph clipping.
-    expect(first.height, closeTo(second.height, 5));
+    expect(first.height, closeTo(second.height, 1));
   }, variant: onMacOS);
 
   testWidgets('the extra bottom line is scrollable and appends on click',
