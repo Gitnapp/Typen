@@ -1,6 +1,9 @@
 import 'dart:io' show FileSystemException;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import 'windowing.dart';
 
 /// One open Window, as the native side reports it. The window list itself
 /// lives natively — this is only what the Window menu needs to draw it.
@@ -25,52 +28,112 @@ class WindowInfo {
 /// Thin wrapper over this Window's platform channel — every Window runs its
 /// own engine and therefore its own channel instance. Document operations are
 /// scoped to the caller; app-wide window commands resolve their target natively.
-/// Methods degrade to a no-op / null when
-/// the channel is absent (unit tests, non-macOS hosts) so callers never need to
-/// know whether they are running on a real app.
+///
+/// Window commands (`newWindow`, `openPath`, `openPreferences`, `closeWindow`)
+/// route to [Windowing] on Linux, where a window is a process — see
+/// `docs/adr/0002-linux-multi-window-via-processes.md`. Everything else
+/// degrades to a no-op / null when the channel is absent (unit tests, hosts
+/// without a native side) so callers never need to know whether they are
+/// running on a real app.
 class Native {
   static const _channel = MethodChannel('typen/native');
 
-  /// Files macOS queued via Launch Services before Dart was ready.
+  static bool get _isLinux => defaultTargetPlatform == TargetPlatform.linux;
+
+  /// The close-confirmation flow registered by the editor, kept so the
+  /// Linux `closeWindow` fallback can run it before quitting the process.
+  static Future<bool> Function()? _confirmCloseHandler;
+
+  /// Spawns a window process on Linux. Goes through GTK's launch machinery
+  /// (the `launch` channel method) so the user's current input event is
+  /// carried as an activation token — without it the WM refuses to raise the
+  /// target window and posts a "window is ready" notification instead. Falls
+  /// back to a bare process spawn where the channel is absent (unit tests).
+  static Future<void> _spawnWindow(List<String> args) async {
+    try {
+      await _channel.invokeMethod<void>('launch', {'args': args});
+      return;
+    } on MissingPluginException {
+      Windowing.spawnWindow(args);
+    } on PlatformException {
+      Windowing.spawnWindow(args);
+    }
+  }
+
+  /// Files queued for this Window before Dart was ready — Launch Services on
+  /// macOS, the command line on Linux.
   static Future<List<String>> consumePendingOpens() async {
+    if (_isLinux) return Windowing.consumeStartupPaths();
     final raw = await _call<List<Object?>>('consumePendingOpens');
     return raw == null ? const [] : raw.cast<String>();
   }
 
-  /// Drives the real NSWindow chrome: proxy icon, title, and the dot in the
-  /// close button that macOS users read as "unsaved".
+  /// Drives the real window chrome: proxy icon, title, and the dot in the
+  /// close button that macOS users read as "unsaved". On Linux it sets the
+  /// GTK title bar text (with a `●` prefix when edited).
   static Future<void> setDocument({String? path, required bool edited}) =>
       _call<void>('setDocument', {'path': path, 'edited': edited})
           .then((_) {});
 
+  /// Keeps the native window chrome in step with the app's resolved
+  /// brightness. macOS chrome tracks the app appearance on its own; on Linux
+  /// this flips GTK's dark-theme preference so the header bar matches.
+  /// De-duplicated: builds call this freely, only changes cross the channel.
+  static Future<void> setDarkMode(bool dark) {
+    if (_lastDarkMode == dark) return Future.value();
+    _lastDarkMode = dark;
+    return _call<void>('setDarkMode', {'dark': dark}).then((_) {});
+  }
+
+  static bool? _lastDarkMode;
+
   /// Opens an additional Window with a blank Untitled Document. Always a fresh
   /// Window — never reuses an Empty one.
-  static Future<void> newWindow() => _call<void>('newWindow').then((_) {});
+  static Future<void> newWindow() {
+    if (_isLinux) return _spawnWindow(const []);
+    return _call<void>('newWindow').then((_) {});
+  }
 
   /// Hands a chosen path to the native open policy, which decides whether to
   /// front the Window already showing it, reuse an Empty one, or open a new
-  /// Window. Never loads the path into this Window directly.
-  static Future<void> openPath(String path) =>
-      _call<void>('openPath', {'path': path}).then((_) {});
+  /// Window. Never loads the path into this Window directly. On Linux there is
+  /// no cross-process policy, so the path always opens in a new Window.
+  static Future<void> openPath(String path) {
+    if (_isLinux) return _spawnWindow([path]);
+    return _call<void>('openPath', {'path': path}).then((_) {});
+  }
 
   /// Brings the Window with this id to the front.
   static Future<void> focusWindow(int id) =>
       _call<void>('focusWindow', {'id': id}).then((_) {});
 
-  /// Closes the key Window through its windowShouldClose / confirmClose flow.
-  /// The app-wide menu may invoke this from a background Window's engine.
-  static Future<void> closeWindow() =>
-      _call<void>('closeWindow').then((_) {});
+  /// Closes this Window through the unsaved-changes flow. On macOS the native
+  /// side drives windowShouldClose / confirmClose for the key Window; on Linux
+  /// the flow runs here and, when it allows, ends this Window's process.
+  static Future<void> closeWindow() async {
+    if (_isLinux) {
+      final confirm = _confirmCloseHandler;
+      if (confirm == null || await confirm()) Windowing.quit();
+      return;
+    }
+    return _call<void>('closeWindow').then((_) {});
+  }
 
   /// Opens the Preferences window, or brings the existing one to the front —
   /// it is a singleton, kept outside the Editor Window registry.
-  static Future<void> openPreferences() =>
-      _call<void>('openPreferences').then((_) {});
+  static Future<void> openPreferences() {
+    if (_isLinux) return _spawnWindow(const ['--preferences']);
+    return _call<void>('openPreferences').then((_) {});
+  }
 
   /// Same as [openPreferences], but also tells it to jump to 关于 and run an
   /// update check — the one place in the app that shows an update dialog.
-  static Future<void> openPreferencesAndCheckUpdates() =>
-      _call<void>('openPreferences', {'checkUpdates': true}).then((_) {});
+  static Future<void> openPreferencesAndCheckUpdates() {
+    if (_isLinux) {
+      return _spawnWindow(const ['--preferences', '--check-updates']);
+    }
+    return _call<void>('openPreferences', {'checkUpdates': true}).then((_) {});
+  }
 
   /// Tells every other Window's Settings to re-read the platform store. Each
   /// Window runs its own engine with its own cached copy — see
@@ -148,6 +211,7 @@ class Native {
     required void Function(List<WindowInfo> windows) onWindowsChanged,
     void Function()? onSettingsChanged,
   }) {
+    _confirmCloseHandler = onConfirmClose;
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'openFile':

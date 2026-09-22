@@ -7,9 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:typen/main.dart';
+import 'package:typen/native.dart';
 import 'package:typen/store.dart';
 import 'package:typen/theme.dart';
 import 'package:typen/widgets/editor_pane.dart';
+import 'package:typen/windowing.dart';
 
 const _channel = 'typen/native';
 const _codec = StandardMethodCodec();
@@ -477,4 +479,174 @@ void main() {
       reason: 'no horizontal scroller appeared for the unwrapped line',
     );
   }, variant: onMacOS);
+
+  testWidgets('the gear asks the native side for the Preferences window',
+      (tester) async {
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel(_channel), (call) async {
+      calls.add(call.method);
+      return null;
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(const MethodChannel(_channel), null),
+    );
+
+    await boot(tester);
+    await tester.tap(find.byTooltip('偏好设置'));
+    await flush(tester);
+
+    expect(calls, contains('openPreferences'));
+  }, variant: onMacOS);
+
+  testWidgets('the gear spawns a Preferences process where windows are '
+      'processes', (tester) async {
+    final spawned = <List<String>>[];
+    final oldSpawn = Windowing.spawnWindow;
+    Windowing.spawnWindow = spawned.add;
+    addTearDown(() => Windowing.spawnWindow = oldSpawn);
+
+    await boot(tester);
+    await tester.tap(find.byTooltip('偏好设置'));
+    await flush(tester);
+
+    expect(spawned, [
+      ['--preferences'],
+    ]);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+  testWidgets('startup paths open the first in this Window and spawn one '
+      'process per extra', (tester) async {
+    final a = seed('# A\n', name: 'a.md');
+    final b = seed('# B\n', name: 'b.md');
+    final spawned = <List<String>>[];
+    final oldSpawn = Windowing.spawnWindow;
+    Windowing.spawnWindow = spawned.add;
+    Windowing.startupPaths = [a.path, b.path];
+    addTearDown(() {
+      Windowing.spawnWindow = oldSpawn;
+      Windowing.startupPaths = const [];
+    });
+
+    await boot(tester);
+
+    expect(bufferOf(tester), '# A\n');
+    expect(spawned, [
+      [b.path],
+    ]);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+  testWidgets('closing a dirty Window prompts, and only allowing it ends the '
+      'process', (tester) async {
+    var quit = false;
+    final oldQuit = Windowing.quit;
+    Windowing.quit = () => quit = true;
+    addTearDown(() => Windowing.quit = oldQuit);
+
+    final file = seed('# 笔记\n');
+    await boot(tester);
+    await openInApp(tester, file);
+
+    await tester.enterText(editorField, '改过了\n');
+    await flush(tester);
+
+    // closeWindow awaits the dialog's answer, so it must not be awaited
+    // before the dialog is on screen to tap.
+    var close = Native.closeWindow();
+    await flush(tester);
+    expect(find.text('有未保存的修改'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await flush(tester);
+    await close;
+    expect(quit, isFalse);
+
+    close = Native.closeWindow();
+    await flush(tester);
+    await tester.tap(find.text('放弃'));
+    await flush(tester);
+    await close;
+    expect(quit, isTrue);
+    // Discarded means discarded — the file on disk kept its content.
+    expect(file.readAsStringSync(), '# 笔记\n');
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+  testWidgets('menu bindings answer with Ctrl where the menu bar never draws',
+      (tester) async {
+    final spawned = <List<String>>[];
+    final oldSpawn = Windowing.spawnWindow;
+    Windowing.spawnWindow = spawned.add;
+    addTearDown(() => Windowing.spawnWindow = oldSpawn);
+
+    await boot(tester);
+    await tester.tap(editorField);
+    await flush(tester);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await flush(tester);
+    expect(spawned, [
+      ['--preferences'],
+    ]);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await flush(tester);
+    expect(spawned, [
+      ['--preferences'],
+      <String>[],
+    ]);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+  testWidgets('a write to the shared prefs file by another window re-reads '
+      'Settings immediately', (tester) async {
+    final prefsDir = Directory.systemTemp.createTempSync('typen_prefs');
+    addTearDown(() => prefsDir.deleteSync(recursive: true));
+    File('${prefsDir.path}/shared_preferences.json').writeAsStringSync('{}');
+    final oldDir = Stores.debugPrefsDirectoryOverride;
+    Stores.debugPrefsDirectoryOverride = prefsDir;
+    addTearDown(() => Stores.debugPrefsDirectoryOverride = oldDir);
+
+    final stores = await boot(tester);
+    expect(stores.settings.fontSize, 15.0);
+
+    // Another window's process wrote this.
+    SharedPreferences.setMockInitialValues({'font_size': 20.0});
+    File('${prefsDir.path}/shared_preferences.json')
+        .writeAsStringSync('{"flutter.font_size":20.0}');
+    // inotify delivery is real-async; let it land before asserting.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await flush(tester);
+
+    expect(stores.settings.fontSize, 20.0);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+  testWidgets('an external font-size change re-renders the editor field',
+      (tester) async {
+    final prefsDir = Directory.systemTemp.createTempSync('typen_prefs');
+    addTearDown(() => prefsDir.deleteSync(recursive: true));
+    File('${prefsDir.path}/shared_preferences.json').writeAsStringSync('{}');
+    final oldDir = Stores.debugPrefsDirectoryOverride;
+    Stores.debugPrefsDirectoryOverride = prefsDir;
+    addTearDown(() => Stores.debugPrefsDirectoryOverride = oldDir);
+
+    await boot(tester);
+    expect(tester.widget<TextField>(editorField).style!.fontSize, 15.0);
+
+    // Another window's process wrote this.
+    File('${prefsDir.path}/shared_preferences.json')
+        .writeAsStringSync('{"flutter.font_size":24.0}');
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await flush(tester);
+
+    expect(tester.widget<TextField>(editorField).style!.fontSize, 24.0);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }

@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -14,18 +19,29 @@ import 'update_checker.dart';
 import 'widgets/dialog_shell.dart';
 import 'widgets/editor_pane.dart';
 import 'widgets/find_bar.dart';
+import 'widgets/chrome_theme_sync.dart';
 import 'widgets/markdown_highlighter.dart';
 import 'widgets/preferences_window.dart';
+import 'windowing.dart';
 
 /// Every Window boots its own engine from scratch (see
 /// `docs/adr/0001-per-window-flutter-engine.md`), so which UI it shows is
-/// decided here, from the entrypoint arguments `PreferencesWindow.swift`
-/// sets on its `FlutterDartProject` — there is no shared router.
+/// decided here, from the entrypoint arguments — `--preferences` and
+/// `--check-updates` on Linux, where a window is a process spawned with these
+/// arguments; on macOS `PreferencesWindow.swift` sets them on its
+/// `FlutterDartProject` — there is no shared router.
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final stores = await Stores.open();
+  Windowing.startupPaths = [
+    for (final a in args)
+      if (!a.startsWith('--')) a,
+  ];
   if (args.contains('--preferences')) {
-    runApp(PreferencesApp(stores: stores));
+    runApp(PreferencesApp(
+      stores: stores,
+      checkUpdates: args.contains('--check-updates'),
+    ));
   } else {
     runApp(TypenApp(stores: stores));
   }
@@ -45,7 +61,7 @@ class TypenApp extends StatelessWidget {
         theme: buildAppTheme(AppPalette.light),
         darkTheme: buildAppTheme(AppPalette.dark),
         themeMode: stores.settings.themeMode,
-        home: EditorHome(stores: stores),
+        home: ChromeThemeSync(child: EditorHome(stores: stores)),
       ),
     );
   }
@@ -94,6 +110,10 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
   /// triggers (quit + activation check) cannot stack dialogs.
   bool _modalOpen = false;
 
+  /// Writes other windows' processes make to the shared preferences store —
+  /// the multi-process replacement for the macOS settingsChanged broadcast.
+  StreamSubscription<FileSystemEvent>? _externalSettingsWatch;
+
   // ─── Find & replace ───────────────────────────────────────────────────────
   final _find = FindController();
   final _findQuery = TextEditingController();
@@ -125,6 +145,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     );
     _controller.addListener(_onBufferChanged);
     _recents = widget.stores.recents.load();
+    _externalSettingsWatch = widget.stores.watchExternalSettings();
     WidgetsBinding.instance.addObserver(this);
     Native.setHandlers(
       onOpenFile: (path) => _openPath(path),
@@ -142,6 +163,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _externalSettingsWatch?.cancel();
     _controller.removeListener(_onBufferChanged);
     _controller.dispose();
     _undo.dispose();
@@ -164,6 +186,14 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     final pending = await Native.consumePendingOpens();
     if (pending.isNotEmpty) {
       await _openPath(pending.first, skipDirtyCheck: true);
+      // Extra paths get Windows of their own. Only on Linux does the pending
+      // list come from this process's own command line; on macOS the native
+      // side has already distributed its queue.
+      if (defaultTargetPlatform == TargetPlatform.linux) {
+        for (final extra in pending.skip(1)) {
+          await Native.openPath(extra);
+        }
+      }
       return;
     }
     _syncWindow();
@@ -217,7 +247,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
     );
     final file = await openFile(acceptedTypeGroups: const [group]);
     if (file == null) return;
-    await Native.openPath(file.path);
+    await _openWithPolicy(file.path);
   }
 
   Future<void> _openRecent(RecentFile recent) async {
@@ -231,7 +261,19 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
       });
       return;
     }
-    await Native.openPath(path);
+    await _openWithPolicy(path);
+  }
+
+  /// Where a chosen path lands. macOS hands this to the native open policy,
+  /// which fronts/reuses/spawns as it sees fit. A multi-process host has no
+  /// cross-window view, so the one rule worth keeping — an Empty Window takes
+  /// the file itself instead of being left behind — is applied here directly.
+  Future<void> _openWithPolicy(String path) {
+    final isEmptyWindow = _activePath == null && !_isDirty;
+    if (defaultTargetPlatform != TargetPlatform.macOS && isEmptyWindow) {
+      return _openPath(path, skipDirtyCheck: true);
+    }
+    return Native.openPath(path);
   }
 
   Future<void> _openPath(String path, {bool skipDirtyCheck = false}) async {
@@ -675,6 +717,50 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The settingsChanged broadcast is a macOS channel message; a
+    // multi-process host re-reads the on-disk store when its window regains
+    // focus instead — the same moment a user who just edited Settings in the
+    // Preferences window comes back.
+    if (state == AppLifecycleState.resumed &&
+        defaultTargetPlatform != TargetPlatform.macOS) {
+      widget.stores.settings.refresh();
+    }
+  }
+
+  /// The app's commands as keyboard shortcuts on hosts whose PlatformMenuBar
+  /// never draws. The binding the menu answers with ⌘ on macOS is answered
+  /// with Ctrl here; a binding the user deliberately de-⌘'d is taken as-is.
+  /// (Undo/cut/copy/paste/select-all are not here on purpose — Flutter's own
+  /// text-field bindings already answer those with Ctrl.)
+  Map<ShortcutActivator, VoidCallback> _shortcutBindings() {
+    SingleActivator translated(SingleActivator a) => a.meta
+        ? SingleActivator(
+            a.trigger,
+            control: true,
+            shift: a.shift,
+            alt: a.alt,
+          )
+        : a;
+    final map = <ShortcutActivator, VoidCallback>{};
+    void bind(ShortcutAction action, VoidCallback run) =>
+        map[translated(_shortcut(action))] = run;
+    bind(ShortcutAction.newDocument, _newDocument);
+    bind(ShortcutAction.newWindow, Native.newWindow);
+    bind(ShortcutAction.open, _openPicker);
+    bind(ShortcutAction.closeWindow, Native.closeWindow);
+    bind(ShortcutAction.save, _save);
+    bind(ShortcutAction.saveAs, _saveAs);
+    bind(ShortcutAction.toggleMode, _toggleMode);
+    bind(ShortcutAction.find, _openFind);
+    bind(ShortcutAction.findReplace, () => _openFind(replace: true));
+    bind(ShortcutAction.findNext, () => _stepFind(1));
+    bind(ShortcutAction.findPrevious, () => _stepFind(-1));
+    bind(ShortcutAction.preferences, Native.openPreferences);
+    return map;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     return PlatformMenuBar(
@@ -684,6 +770,10 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
           const SingleActivator(LogicalKeyboardKey.escape): () {
             if (_findVisible) _closeFind();
           },
+          // The menu bar answers the app's commands on macOS; everywhere else
+          // it never draws, so the keys bind directly here.
+          if (Theme.of(context).platform != TargetPlatform.macOS)
+            ..._shortcutBindings(),
         },
         child: Scaffold(
           backgroundColor: palette.surface0,
@@ -702,6 +792,7 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
                 encoding: _encoding,
                 mode: _mode,
                 onToggleMode: _toggleMode,
+                onOpenSettings: Native.openPreferences,
               ),
               Divider(height: 1, color: palette.border),
               if (_findVisible)
@@ -758,13 +849,27 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
 
   // ─── Menu bar ─────────────────────────────────────────────────────────────
 
+  /// A menu group of platform-provided items, keeping only those the host
+  /// platform can actually supply. Instantiating an unsupported one trips a
+  /// framework assert (and it would be dead weight in a menu the host never
+  /// draws anyway). Returns null when the platform provides none — an empty
+  /// group is itself an assert.
+  PlatformMenuItemGroup? _providedGroup(
+    List<PlatformProvidedMenuItemType> types,
+  ) {
+    final members = [
+      for (final type in types)
+        if (PlatformProvidedMenuItem.hasMenu(type))
+          PlatformProvidedMenuItem(type: type),
+    ];
+    return members.isEmpty ? null : PlatformMenuItemGroup(members: members);
+  }
+
   List<PlatformMenuItem> _menus() => [
     PlatformMenu(
       label: 'Typen',
       menus: [
-        const PlatformProvidedMenuItem(
-          type: PlatformProvidedMenuItemType.about,
-        ),
+        ?_providedGroup(const [PlatformProvidedMenuItemType.about]),
         PlatformMenuItemGroup(
           members: [
             PlatformMenuItem(
@@ -782,29 +887,13 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
             ),
           ],
         ),
-        const PlatformMenuItemGroup(
-          members: [
-            PlatformProvidedMenuItem(
-              type: PlatformProvidedMenuItemType.servicesSubmenu,
-            ),
-          ],
-        ),
-        const PlatformMenuItemGroup(
-          members: [
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.hide),
-            PlatformProvidedMenuItem(
-              type: PlatformProvidedMenuItemType.hideOtherApplications,
-            ),
-            PlatformProvidedMenuItem(
-              type: PlatformProvidedMenuItemType.showAllApplications,
-            ),
-          ],
-        ),
-        const PlatformMenuItemGroup(
-          members: [
-            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.quit),
-          ],
-        ),
+        ?_providedGroup(const [PlatformProvidedMenuItemType.servicesSubmenu]),
+        ?_providedGroup(const [
+          PlatformProvidedMenuItemType.hide,
+          PlatformProvidedMenuItemType.hideOtherApplications,
+          PlatformProvidedMenuItemType.showAllApplications,
+        ]),
+        ?_providedGroup(const [PlatformProvidedMenuItemType.quit]),
       ],
     ),
     PlatformMenu(
@@ -961,28 +1050,16 @@ class _EditorHomeState extends State<EditorHome> with WidgetsBindingObserver {
           shortcut: _shortcut(ShortcutAction.toggleMode),
           onSelected: _toggleMode,
         ),
-        const PlatformMenuItemGroup(
-          members: [
-            PlatformProvidedMenuItem(
-              type: PlatformProvidedMenuItemType.toggleFullScreen,
-            ),
-          ],
-        ),
+        ?_providedGroup(const [PlatformProvidedMenuItemType.toggleFullScreen]),
       ],
     ),
     PlatformMenu(
       label: '窗口',
       menus: [
-        const PlatformMenuItemGroup(
-          members: [
-            PlatformProvidedMenuItem(
-              type: PlatformProvidedMenuItemType.minimizeWindow,
-            ),
-            PlatformProvidedMenuItem(
-              type: PlatformProvidedMenuItemType.zoomWindow,
-            ),
-          ],
-        ),
+        ?_providedGroup(const [
+          PlatformProvidedMenuItemType.minimizeWindow,
+          PlatformProvidedMenuItemType.zoomWindow,
+        ]),
         if (_windows.isNotEmpty)
           PlatformMenuItemGroup(
             members: [
@@ -1043,6 +1120,7 @@ class _TitleBar extends StatelessWidget {
     required this.encoding,
     required this.mode,
     required this.onToggleMode,
+    required this.onOpenSettings,
   });
 
   final String title;
@@ -1051,17 +1129,22 @@ class _TitleBar extends StatelessWidget {
   final DocumentEncoding encoding;
   final EditorMode mode;
   final VoidCallback onToggleMode;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // The real title bar is transparent and the traffic lights float over
+    // this strip's top ~28px on macOS — see `EditorWindow.swift` — so that
+    // much is reserved before anything is drawn. Other platforms have
+    // ordinary window decorations and need no such reservation.
+    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
     return Container(
-      height: 58,
+      height: isMacOS ? 58 : 44,
       color: p.surface0,
-      // The real title bar is transparent and the traffic lights float over
-      // this strip's top ~28px — see `EditorWindow.swift` — so that much is
-      // reserved before anything is drawn.
-      padding: const EdgeInsets.fromLTRB(14, 28, 14, 0),
+      padding: isMacOS
+          ? const EdgeInsets.fromLTRB(14, 28, 14, 0)
+          : const EdgeInsets.symmetric(horizontal: 14),
       child: Row(
         children: [
           Text(
@@ -1091,6 +1174,19 @@ class _TitleBar extends StatelessWidget {
           _StatusChip(status: status),
           const SizedBox(width: 10),
           _ModePill(mode: mode, onTap: onToggleMode),
+          const SizedBox(width: 6),
+          Tooltip(
+            message: '偏好设置',
+            child: IconButton(
+              onPressed: onOpenSettings,
+              icon: const Icon(CupertinoIcons.gear),
+              iconSize: 15,
+              color: p.textSecondary,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
         ],
       ),
     );

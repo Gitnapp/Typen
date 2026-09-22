@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -278,11 +281,55 @@ class Settings extends ChangeNotifier {
   /// Re-reads every value from the platform's preferences store. Each Window
   /// runs its own engine with its own `SharedPreferences` cache, so a change
   /// made in one (the Preferences window, another Window) never appears here
-  /// on its own — the native side calls this in response to its
-  /// `settingsChanged` broadcast.
+  /// on its own — macOS calls this in response to the native
+  /// `settingsChanged` broadcast; on Linux the backing-file watcher does.
   Future<void> refresh() async {
-    await _prefs.reload();
+    if (defaultTargetPlatform == TargetPlatform.linux) {
+      await _refreshFromFile();
+    } else {
+      await _prefs.reload();
+    }
     notifyListeners();
+  }
+
+  /// shared_preferences' Linux store caches its backing file at first read
+  /// and never invalidates, so `reload()` there replays the process's own
+  /// cache forever and other windows' writes never show up. Read the file
+  /// directly and push changes through the plugin's setters, which updates
+  /// that cache. Values already equal are not rewritten — that's what keeps
+  /// two watching windows from ping-ponging writes forever.
+  Future<void> _refreshFromFile() async {
+    final file = sharedPreferencesFile();
+    if (file == null) return;
+    final Map<String, Object?> data;
+    try {
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is! Map) return;
+      data = decoded.cast<String, Object?>();
+    } catch (_) {
+      // The plugin does not write atomically — a mid-write read just waits
+      // for the next change event.
+      return;
+    }
+    for (final entry in data.entries) {
+      const prefix = 'flutter.';
+      if (!entry.key.startsWith(prefix)) continue;
+      final key = entry.key.substring(prefix.length);
+      final value = entry.value;
+      if (value == null || _prefs.get(key) == value) continue;
+      switch (value) {
+        case bool v:
+          await _prefs.setBool(key, v);
+        case int v:
+          await _prefs.setInt(key, v);
+        case double v:
+          await _prefs.setDouble(key, v);
+        case String v:
+          await _prefs.setString(key, v);
+        case List v:
+          await _prefs.setStringList(key, v.map((e) => '$e').toList());
+      }
+    }
   }
 }
 
@@ -296,4 +343,45 @@ class Stores {
     final prefs = await SharedPreferences.getInstance();
     return Stores(RecentsStore(prefs), CursorStore(prefs), Settings(prefs));
   }
+
+  /// Test hook: where [watchExternalSettings] looks instead of the real XDG
+  /// path, so a test never touches the real store.
+  static Directory? debugPrefsDirectoryOverride;
+
+  /// Watches the on-disk preferences store for writes made by *other*
+  /// windows. On Linux each window is its own process, so the settingsChanged
+  /// broadcast has no cross-process channel — the file is the channel. The
+  /// plugin rewrites the whole JSON on every set (possibly by atomic
+  /// replace), so the directory is watched rather than the file's inode.
+  ///
+  /// Returns null on macOS (the native broadcast handles it there) and in
+  /// unit tests without [debugPrefsDirectoryOverride] set.
+  StreamSubscription<FileSystemEvent>? watchExternalSettings() {
+    if (defaultTargetPlatform != TargetPlatform.linux) return null;
+    final dir = debugPrefsDirectoryOverride ?? defaultPrefsDirectory();
+    if (dir == null || !dir.existsSync()) return null;
+    return dir
+        .watch()
+        .where((e) => e.path.endsWith('/shared_preferences.json'))
+        .listen((_) => settings.refresh());
+  }
+
+  /// `$XDG_DATA_HOME/<application id>` — the id is `APPLICATION_ID` in
+  /// `linux/CMakeLists.txt`; rename one and the other must follow.
+  static Directory? defaultPrefsDirectory() {
+    final home = Platform.environment['HOME'];
+    if (home == null) return null;
+    final dataHome =
+        Platform.environment['XDG_DATA_HOME'] ?? '$home/.local/share';
+    return Directory('$dataHome/com.example.typen');
+  }
+}
+
+/// The SharedPreferences backing file — what [Stores.watchExternalSettings]
+/// watches and what [Settings.refresh] reads on Linux.
+File? sharedPreferencesFile() {
+  final dir =
+      Stores.debugPrefsDirectoryOverride ?? Stores.defaultPrefsDirectory();
+  if (dir == null) return null;
+  return File('${dir.path}/shared_preferences.json');
 }

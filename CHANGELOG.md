@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [2026-09-22] Linux 移植 + 应用图标
+
+### Linux 版（`docs/adr/0002-linux-multi-window-via-processes.md`）
+
+- 多窗口走"一窗口一进程"：新建窗口/打开文件/偏好设置都拉起同二进制的新进程；命令行位置参数打开文件，多文件各开一窗。
+- 偏好设置是单例：共用 application id 但不带 `G_APPLICATION_NON_UNIQUE`，二次打开由 D-Bus 转发激活并置顶已有窗口（经 GTK launch context 携带激活令牌，否则 Wayland 只弹"窗口就绪"通知）。注意 application id 必须与编辑器一致——path_provider 用它推导 SharedPreferences 目录，不同 id 会静默分叉存储。
+- 窗口 X 按钮接入未保存确认（GTK delete-event → Dart `confirmClose`）；标题栏显示文件名 + 未保存 `●` 前缀，并跟随应用明暗主题。
+- Linux 无菜单栏，应用命令绑定 Ctrl 系快捷键（由 ⌘ 默认绑定翻译）；设置跨进程经配置文件 inotify 监听实时同步（Linux 版 shared_preferences 的 reload 不重读文件，需直读 JSON 回写缓存）。
+
+### 应用图标（macOS Liquid Glass 风格）
+
+- 新图标：石墨色液态玻璃方碑 + 磨砂衬线 T + 底部金色（#D4A93A）光池。SVG 源文件在 `assets/brand/typen.svg`。
+- macOS `AppIcon.appiconset` 全套尺寸已更新；「关于」页的红色 T 占位换成真图标；Linux 窗口图标、dock（.desktop + hicolor）同步接入。
+
 ## [2026-09-09] v0.5.6 —— 修复关闭窗口目标错误
 
 - 修复使用 Command+Shift+N 新建窗口后，Command+W 可能关闭旧窗口的问题。关闭操作现在以当前接收键盘输入的窗口为准，不再取决于哪个窗口生成了公共菜单。

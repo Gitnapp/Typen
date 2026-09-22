@@ -11,15 +11,25 @@ import '../theme.dart';
 import '../update_checker.dart';
 import '../updater.dart';
 import 'settings_controls.dart';
+import 'chrome_theme_sync.dart';
 import 'update_dialog.dart';
 
 /// The Preferences window's engine boots straight into this — see `main()`
 /// and `docs/adr/0001-per-window-flutter-engine.md`. It runs independently
 /// of every Editor Window's engine, so a change made here is pushed out via
 /// `Native.notifySettingsChanged()` rather than being visible on its own.
+///
+/// [checkUpdates] asks the window to jump to 关于 and run an update check once
+/// it is up — how a `--check-updates` process spawn (Linux) carries the
+/// request that macOS passes through the native channel.
 class PreferencesApp extends StatelessWidget {
-  const PreferencesApp({super.key, required this.stores});
+  const PreferencesApp({
+    super.key,
+    required this.stores,
+    this.checkUpdates = false,
+  });
   final Stores stores;
+  final bool checkUpdates;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +41,12 @@ class PreferencesApp extends StatelessWidget {
         theme: buildAppTheme(AppPalette.light),
         darkTheme: buildAppTheme(AppPalette.dark),
         themeMode: stores.settings.themeMode,
-        home: PreferencesHome(settings: stores.settings),
+        home: ChromeThemeSync(
+          child: PreferencesHome(
+            settings: stores.settings,
+            checkUpdates: checkUpdates,
+          ),
+        ),
       ),
     );
   }
@@ -40,8 +55,13 @@ class PreferencesApp extends StatelessWidget {
 enum _Category { appearance, shortcuts, about }
 
 class PreferencesHome extends StatefulWidget {
-  const PreferencesHome({super.key, required this.settings});
+  const PreferencesHome({
+    super.key,
+    required this.settings,
+    this.checkUpdates = false,
+  });
   final Settings settings;
+  final bool checkUpdates;
 
   @override
   State<PreferencesHome> createState() => _PreferencesHomeState();
@@ -58,7 +78,9 @@ class _PreferencesHomeState extends State<PreferencesHome> {
     // same ordering `Native.setHandlers` documents for the Editor Window.
     Native.setPreferencesHandlers(onCheckUpdates: _runUpdateCheck);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (await Native.consumePendingCheckUpdates()) _runUpdateCheck();
+      if (widget.checkUpdates || await Native.consumePendingCheckUpdates()) {
+        _runUpdateCheck();
+      }
     });
   }
 
@@ -123,15 +145,35 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // The traffic lights sit over this column on macOS — the transparent
+    // titlebar means nothing pushes content below them on its own. Pushed as
+    // an in-app route elsewhere, the column instead leads with a back button.
+    final isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+    final canPop = Navigator.canPop(context);
     return Container(
       width: 190,
       color: p.surface1,
-      // The traffic lights sit over this column — the transparent titlebar
-      // means nothing pushes content below them on its own.
-      padding: const EdgeInsets.fromLTRB(10, 36, 10, 10),
+      padding: EdgeInsets.fromLTRB(10, isMacOS ? 36 : 10, 10, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (canPop)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: () => Navigator.maybePop(context),
+                icon: const Icon(CupertinoIcons.back),
+                iconSize: 17,
+                color: p.textSecondary,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 28,
+                  height: 28,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          if (canPop) const SizedBox(height: 6),
           for (final (cat, icon, label) in _items)
             _SidebarItem(
               icon: icon,
@@ -874,21 +916,12 @@ class _AboutPageState extends State<_AboutPage> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: p.surface2,
-                      borderRadius: BorderRadius.circular(kRadiusControl),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'T',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: p.gold,
-                      ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(kRadiusControl),
+                    child: Image.asset(
+                      'assets/brand/typen.png',
+                      width: 40,
+                      height: 40,
                     ),
                   ),
                   const SizedBox(width: 12),

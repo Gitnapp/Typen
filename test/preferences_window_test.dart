@@ -248,4 +248,22 @@ void main() {
       await checkPage('外观');
     },
   );
+  testWidgets('the About card shows the app icon', (tester) async {
+    final stores = await boot();
+    await tester.pumpWidget(PreferencesApp(stores: stores));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('关于'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is Image &&
+            w.image is AssetImage &&
+            (w.image as AssetImage).assetName == 'assets/brand/typen.png',
+      ),
+      findsOneWidget,
+    );
+  });
 }
