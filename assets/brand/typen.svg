@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Typen</title>
+  <desc id="desc">A frosted serif T suspended in translucent graphite glass, above a broad gold caustic and a softly refracting lower rim.</desc>
+  <defs>
+    <!-- Symmetric superellipses: (x−512)^4 + (y−512)^4 = radius^4, approximated by 32 periodic cubic segments. Transparent outside the icon. -->
+    <path id="canvas" d="M512 64C541.3215 64 570.6558 63.9357 601.0779 64.1752C631.5 64.4146 663.0978 64.8832 696.2266 67.2376C729.3554 69.592 764.2535 73.8209 798.0461 83.9018C831.8386 93.9827 864.0652 110.622 888.7216 135.2784C913.378 159.9348 930.0173 192.1614 940.0982 225.9539C950.1791 259.7465 954.408 294.6446 956.7624 327.7734C959.1168 360.9022 959.5854 392.5 959.8248 422.9221C960.0643 453.3442 960 482.6785 960 512C960 541.3215 960.0643 570.6558 959.8248 601.0779C959.5854 631.5 959.1168 663.0978 956.7624 696.2266C954.408 729.3554 950.1791 764.2535 940.0982 798.0461C930.0173 831.8386 913.378 864.0652 888.7216 888.7216C864.0652 913.378 831.8386 930.0173 798.0461 940.0982C764.2535 950.1791 729.3554 954.408 696.2266 956.7624C663.0978 959.1168 631.5 959.5854 601.0779 959.8248C570.6558 960.0643 541.3215 960 512 960C482.6785 960 453.3442 960.0643 422.9221 959.8248C392.5 959.5854 360.9022 959.1168 327.7734 956.7624C294.6446 954.408 259.7465 950.1791 225.9539 940.0982C192.1614 930.0173 159.9348 913.378 135.2784 888.7216C110.622 864.0652 93.9827 831.8386 83.9018 798.0461C73.8209 764.2535 69.592 729.3554 67.2376 696.2266C64.8832 663.0978 64.4146 631.5 64.1752 601.0779C63.9357 570.6558 64 541.3215 64 512C64 482.6785 63.9357 453.3442 64.1752 422.9221C64.4146 392.5 64.8832 360.9022 67.2376 327.7734C69.592 294.6446 73.8209 259.7465 83.9018 225.9539C93.9827 192.1614 110.622 159.9348 135.2784 135.2784C159.9348 110.622 192.1614 93.9827 225.9539 83.9018C259.7465 73.8209 294.6446 69.592 327.7734 67.2376C360.9022 64.8832 392.5 64.4146 422.9221 64.1752C453.3442 63.9357 482.6785 64 512 64Z"/>
+    <path id="pane" d="M512 98C539.0962 98 566.2042 97.9406 594.3175 98.1619C622.4308 98.3831 651.6305 98.8162 682.2451 100.9919C712.8597 103.1676 745.1093 107.0755 776.3372 116.3914C807.5652 125.7072 837.346 141.0838 860.1311 163.8689C882.9162 186.654 898.2928 216.4348 907.6086 247.6628C916.9245 278.8907 920.8324 311.1403 923.0081 341.7549C925.1838 372.3695 925.6169 401.5692 925.8381 429.6825C926.0594 457.7958 926 484.9038 926 512C926 539.0962 926.0594 566.2042 925.8381 594.3175C925.6169 622.4308 925.1838 651.6305 923.0081 682.2451C920.8324 712.8597 916.9245 745.1093 907.6086 776.3372C898.2928 807.5652 882.9162 837.346 860.1311 860.1311C837.346 882.9162 807.5652 898.2928 776.3372 907.6086C745.1093 916.9245 712.8597 920.8324 682.2451 923.0081C651.6305 925.1838 622.4308 925.6169 594.3175 925.8381C566.2042 926.0594 539.0962 926 512 926C484.9038 926 457.7958 926.0594 429.6825 925.8381C401.5692 925.6169 372.3695 925.1838 341.7549 923.0081C311.1403 920.8324 278.8907 916.9245 247.6628 907.6086C216.4348 898.2928 186.654 882.9162 163.8689 860.1311C141.0838 837.346 125.7072 807.5652 116.3914 776.3372C107.0755 745.1093 103.1676 712.8597 100.9919 682.2451C98.8162 651.6305 98.3831 622.4308 98.1619 594.3175C97.9406 566.2042 98 539.0962 98 512C98 484.9038 97.9406 457.7958 98.1619 429.6825C98.3831 401.5692 98.8162 372.3695 100.9919 341.7549C103.1676 311.1403 107.0755 278.8907 116.3914 247.6628C125.7072 216.4348 141.0838 186.654 163.8689 163.8689C186.654 141.0838 216.4348 125.7072 247.6628 116.3914C278.8907 107.0755 311.1403 103.1676 341.7549 100.9919C372.3695 98.8162 401.5692 98.3831 429.6825 98.1619C457.7958 97.9406 484.9038 98 512 98Z"/>
+    <!-- Outlined letterform: gently bracketed serifs and deliberately slender crossbar. -->
+    <path id="letter" d="M294 290H730L739 415H716C705 345 683 325 609 325H558V643C558 688 568 701 623 706V730H401V706C456 701 466 688 466 643V325H415C341 325 319 345 308 415H285L294 290Z"/>
+    <clipPath id="clip"><use href="#canvas"/></clipPath>
+    <linearGradient id="graphite" x1="512" y1="64" x2="512" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#495259" stop-opacity=".94"/><stop offset=".38" stop-color="#23292D" stop-opacity=".96"/><stop offset=".76" stop-color="#171B1E" stop-opacity=".97"/><stop offset="1" stop-color="#353A3C" stop-opacity=".94"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="144" y1="93" x2="838" y2="952" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".78"/><stop offset=".28" stop-color="#DEE6EA" stop-opacity=".23"/><stop offset=".55" stop-color="#FFFFFF" stop-opacity=".035"/><stop offset=".83" stop-color="#B9C3CB" stop-opacity=".12"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".34"/>
+    </linearGradient>
+    <linearGradient id="paneFill" x1="338" y1="104" x2="608" y2="920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F0F5F8" stop-opacity=".18"/><stop offset=".48" stop-color="#B9C3CE" stop-opacity=".045"/><stop offset="1" stop-color="#A7B0BA" stop-opacity=".13"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0" cy="0" r="1" gradientTransform="translate(228 114) rotate(42) scale(794 445)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E5EDF3" stop-opacity=".17"/><stop offset="1" stop-color="#E5EDF3" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="goldPool" cx="0" cy="0" r="1" gradientTransform="translate(512 772) scale(286 94)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F2D994" stop-opacity=".57"/><stop offset=".3" stop-color="#D4A93A" stop-opacity=".40"/><stop offset=".64" stop-color="#D4A93A" stop-opacity=".15"/><stop offset="1" stop-color="#D4A93A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="innerLight" cx="0" cy="0" r="1" gradientTransform="translate(378 305) rotate(35) scale(520 360)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#B6CBD5" stop-opacity=".27"/><stop offset=".5" stop-color="#8EA6B3" stop-opacity=".10"/><stop offset="1" stop-color="#9BB3BE" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bottomRefraction" cx="0" cy="0" r="1" gradientTransform="translate(512 930) scale(350 112)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8C66F" stop-opacity=".68"/><stop offset=".45" stop-color="#D4A93A" stop-opacity=".35"/><stop offset="1" stop-color="#D4A93A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="edgeLight" x1="180" y1="140" x2="790" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EDF8FF" stop-opacity=".55"/><stop offset=".3" stop-color="#BCD5E3" stop-opacity=".09"/><stop offset=".58" stop-color="#FFFFFF" stop-opacity="0"/><stop offset="1" stop-color="#D4DDE0" stop-opacity=".25"/>
+    </linearGradient>
+    <filter id="rimBlur" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="5"/></filter>
+    <linearGradient id="frost" x1="360" y1="290" x2="678" y2="762" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5F7F7" stop-opacity=".93"/><stop offset=".29" stop-color="#DCE2E5" stop-opacity=".79"/><stop offset=".57" stop-color="#B8C0C6" stop-opacity=".66"/><stop offset=".82" stop-color="#D1CDBA" stop-opacity=".77"/><stop offset="1" stop-color="#F4E5B9" stop-opacity=".88"/>
+    </linearGradient>
+    <linearGradient id="letterEdge" x1="340" y1="290" x2="651" y2="738" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity=".96"/><stop offset=".40" stop-color="#FFFFFF" stop-opacity=".40"/><stop offset=".67" stop-color="#FFFFFF" stop-opacity=".10"/><stop offset="1" stop-color="#FFE9A7" stop-opacity=".65"/>
+    </linearGradient>
+    <filter id="paneShadow" x="-15%" y="-15%" width="130%" height="140%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="12"/><feOffset dy="13" result="paneDepth"/><feFlood flood-color="#000000" flood-opacity=".36"/><feComposite in2="paneDepth" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="letterShadow" x="-30%" y="-25%" width="160%" height="165%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="15"/><feOffset dy="20" result="shadow"/><feFlood flood-color="#000000" flood-opacity=".50"/><feComposite in2="shadow" operator="in"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="blur"><feGaussianBlur stdDeviation="24"/></filter>
+    <filter id="innerGlow" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="soft"/><feComposite in="SourceAlpha" in2="soft" operator="out" result="edge"/><feFlood flood-color="#EAF0F4" flood-opacity=".14"/><feComposite in2="edge" operator="in"/>
+    </filter>
+  </defs>
+  <use href="#canvas" fill="url(#graphite)"/>
+  <g clip-path="url(#clip)">
+    <!-- Light-bearing core sits below a translucent, suspended front slab. -->
+    <use href="#canvas" fill="url(#innerLight)"/>
+    <use href="#canvas" fill="url(#sheen)"/>
+    <use href="#pane" stroke="url(#edgeLight)" stroke-width="22" filter="url(#rimBlur)"/>
+    <ellipse cx="512" cy="772" rx="300" ry="110" fill="url(#goldPool)" filter="url(#blur)"/>
+    <use href="#pane" fill="url(#paneFill)" filter="url(#paneShadow)"/>
+    <use href="#pane" stroke="url(#rim)" stroke-width="2"/>
+    <!-- Broad, low caustic: no vertical beam or cursor-shaped hotspot. -->
+    <ellipse cx="512" cy="772" rx="286" ry="94" fill="url(#goldPool)" opacity=".63"/>
+    <ellipse cx="512" cy="790" rx="156" ry="13" fill="#F1D590" opacity=".14" filter="url(#blur)"/>
+    <use href="#pane" stroke="url(#bottomRefraction)" stroke-width="12" filter="url(#rimBlur)"/>
+    <use href="#pane" stroke="url(#bottomRefraction)" stroke-width="2.5"/>
+    <!-- Refracted lower edge gives the letter a thin, physical glass thickness. -->
+    <use href="#letter" transform="translate(0 7)" fill="#8B969E" fill-opacity=".27" stroke="#101213" stroke-opacity=".4" stroke-width="2"/>
+    <use href="#letter" fill="url(#frost)" filter="url(#letterShadow)"/>
+    <use href="#letter" filter="url(#innerGlow)"/>
+    <use href="#letter" stroke="url(#letterEdge)" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M300 292H726M468 334V638" stroke="#FFFFFF" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/>
+    <use href="#canvas" filter="url(#innerGlow)"/>
+  </g>
+  <use href="#canvas" stroke="url(#rim)" stroke-width="3"/>
+</svg>
